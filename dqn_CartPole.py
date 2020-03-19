@@ -52,8 +52,8 @@ for eposide in range(1000):
   epsilon_ = eps_end + (eps_start - eps_end) * math.exp(-1.0 * eposide / eps_decay)
   learning_rate = lr_end + (lr_start - lr_end) * math.exp(-1.0 * eposide / lr_decay)
   observation = env.reset()
-  if(eposide%100 == 0):
-    critic = copy.deepcopy(actor)
+  # if(eposide%100 == 0):
+  #   critic = copy.deepcopy(actor)
   for t in range(200):
     env.render()
     #Greedy action
@@ -75,7 +75,7 @@ for eposide in range(1000):
     # output = actor(torch.from_numpy(observation))
     Qvalue = output[action]
     target = output.clone()
-    target[action] = Qvalue + learning_rate*(reward + 1.0 * torch.max(critic(torch.from_numpy(observation_next))) - Qvalue) 
+    target[action] = Qvalue + learning_rate*(reward + 1.0 * torch.max(actor(torch.from_numpy(observation_next))) - Qvalue) 
   
     loss = criterion(output, target)
     optimizer.zero_grad()
