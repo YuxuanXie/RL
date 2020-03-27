@@ -41,14 +41,17 @@ criterion = nn.MSELoss()
 
 device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
-env = gym.make('CartPole-v0')
+env = gym.make('CartPole-v1')
 env.reset()
 time_setp = []
 
 replay_exp = []
 SIZE = 50
 
-for eposide in range(1000):
+f = open("result.csv", "w")
+f.write("timesteps,trial\n")
+
+for eposide in range(300):
   epsilon_ = eps_end + (eps_start - eps_end) * math.exp(-1.0 * eposide / eps_decay)
   learning_rate = lr_end + (lr_start - lr_end) * math.exp(-1.0 * eposide / lr_decay)
   observation = env.reset()
@@ -86,6 +89,8 @@ for eposide in range(1000):
 
     if done :
       time_setp.append(t+1)
+      f.write("{},{} \n".format(t+1,eposide))
       print("Episode {} finished after {} timesteps and average = {:.2f}                           ".format(eposide, t+1, statistics.mean(time_setp)))
       break
+f.close()
 env.close()
