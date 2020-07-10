@@ -6,13 +6,34 @@ import tensorflow as tf
 from tensorflow import keras
 import tensorflow_probability as tfp
 from tensorflow.keras import models,layers
+from tensorflow.keras.models import Model
 from tensorflow.keras.optimizers import Adam
+from tensorflow.keras.layers import Input, Dense
 
 tfd = tfp.distributions
 env = gym.make("CartPole-v1")
 vector_length = env.observation_space.shape[0]
 tf.keras.backend.set_floatx('float64')
 action_length = env.action_space.n
+
+
+def model(state_shape, action_dim, units=(400, 300, 100)):
+    state = Input(shape=state_shape)
+
+    vf = Dense(units[0], name="Value_L0", activation="tanh")(state)
+    for index in range(1, len(units)):
+        vf = Dense(units[index], name="Value_L{}".format(index), activation="tanh")(vf)
+
+    value_pred = Dense(1, name="Out_value")(vf)
+
+    pi = Dense(units[0], name="Policy_L0", activation="tanh")(state)
+    for index in range(1, len(units)):
+        pi = Dense(units[index], name="Policy_L{}".format(index), activation="tanh")(pi)
+
+    action_probs = Dense(action_dim, name="Out_probs", activation='softmax')(pi)
+    model = Model(inputs=state, outputs=[action_probs, value_pred])
+
+    return model
 
 
 class MAPPO:
@@ -37,19 +58,7 @@ class MAPPO:
     self.n_updates = n_updates  # number of epochs per episode
     self.model_optimizer = Adam(learning_rate=lr)
 
-    self.actor_model = models.Sequential()
-    self.actor_model.add(layers.Dense(4, activation="tanh", input_shape=(vector_length,)))
-    self.actor_model.add(layers.Dense(24, activation="tanh"))
-    self.actor_model.add(layers.Dense(16, activation="tanh"))
-    self.actor_model.add(layers.Dense(action_length, activation="softmax"))
-
-
-    self.critic_model = models.Sequential()
-    self.critic_model.add(layers.Dense(4, activation="relu", input_shape=(vector_length,)))
-    self.critic_model.add(layers.Dense(24, activation="relu"))
-    self.critic_model.add(layers.Dense(16, activation="relu"))
-    self.critic_model.add(layers.Dense(1))
-
+    self.model = model(vector_length,2,hidden_units)
     self.summaries = {}
 
 
@@ -58,28 +67,22 @@ class MAPPO:
     return dist
 
   def evaluate_actions(self, states, actions):
-    output = self.actor_model(states)
-    value = self.critic(states)
+    output,value = self.model(states)
     dist = self.get_dist(output)
     log_probs = dist.log_prob(actions)
     entropy = dist.entropy()
     return log_probs, entropy, value
 
-  def actor(self, state):
+  def act(self, state):
     if len(state.shape) == 1:
       state = np.expand_dims(state, axis=0).astype(np.float64)
-    output = self.actor_model(state)
+    output, value = self.model(state)
     dist = self.get_dist(output)
 
     action = dist.sample()
     log_probs = dist.log_prob(action)
-    return action[0].numpy(), log_probs[0].numpy()
+    return action[0].numpy(), value[0][0], log_probs[0].numpy()
 
-
-  def critic(self, state):
-    if len(state.shape) == 1:
-      state = np.expand_dims(state, axis=0).astype(np.float64)
-    return self.critic_model(state)
 
   def get_gaes(self, rewards, v_preds, next_v_preds):
     # source: https://github.com/uidilr/ppo_tf/blob/master/ppo.py#L98
@@ -90,14 +93,15 @@ class MAPPO:
     return gaes
 
   def save_model(self, fn):
-    self.actor_model.save(fn+"_actor.h5")
-    self.critic_model.save(fn+"_critic.h5")
+    # self.actor_model.save(fn+"_actor.h5")
+    # self.critic_model.save(fn+"_critic.h5")
+    self.model.save(fn+".h5")
 
   def learn(self, observations, actions, log_probs, next_v_preds, rewards, gaes):
     rewards = np.expand_dims(rewards, axis=-1).astype(np.float64)
     next_v_preds = np.expand_dims(next_v_preds, axis=-1).astype(np.float64)
 
-    with tf.GradientTape(persistent=True) as tape:
+    with tf.GradientTape() as tape:
       new_log_probs, entropy, state_values = self.evaluate_actions(observations, actions)
 
       ratios = tf.exp(new_log_probs - log_probs)
@@ -110,19 +114,16 @@ class MAPPO:
       vf_loss = tf.reduce_mean(tf.math.square(state_values - target_values))
 
       entropy = tf.reduce_mean(entropy)
-      actor_loss = -loss_clip - self.c2 * entropy
+      total_loss = -loss_clip + self.c1 * vf_loss - self.c2 * entropy
     
-    train_actor_variables = self.actor_model.trainable_variables
-    train_critic_variables = self.critic_model.trainable_variables
+    train_variables = self.model.trainable_variables
 
-    grad = tape.gradient(actor_loss, train_actor_variables)  # compute gradient
-    self.model_optimizer.apply_gradients(zip(grad, train_actor_variables))
+    grad = tape.gradient(total_loss, train_variables)  # compute gradient
+    self.model_optimizer.apply_gradients(zip(grad, train_variables))
 
-    grad = tape.gradient(vf_loss, train_critic_variables)  # compute gradient
-    self.model_optimizer.apply_gradients(zip(grad, train_critic_variables))
 
     # tensorboard info
-    self.summaries['actor_loss'] = actor_loss
+    self.summaries['total_loss'] = total_loss
     self.summaries['surr_loss'] = loss_clip
     self.summaries['vf_loss'] = vf_loss
     self.summaries['entropy'] = entropy
@@ -141,8 +142,7 @@ class MAPPO:
       obs, actions, log_probs, rewards, v_preds, next_v_preds = [], [], [], [], [], []
 
       while not done and steps < max_steps:
-        action, log_prob = self.actor(cur_state)  # determine action
-        value = self.critic(cur_state)
+        action, value, log_prob = self.act(cur_state)  # determine action
         next_state, reward, done, _ = env.step(action)  # act on env
         # self.env.render(mode='rgb_array')
 
@@ -171,7 +171,7 @@ class MAPPO:
 
         # Tensorboard update
         with summary_writer.as_default():
-          tf.summary.scalar('Loss/actor_loss', self.summaries['actor_loss'], step=epoch)
+          tf.summary.scalar('Loss/total_loss', self.summaries['total_loss'], step=epoch)
           tf.summary.scalar('Loss/clipped_surr', self.summaries['surr_loss'], step=epoch)
           tf.summary.scalar('Loss/vf_loss', self.summaries['vf_loss'], step=epoch)
           tf.summary.scalar('Loss/entropy', self.summaries['entropy'], step=epoch)
@@ -190,18 +190,19 @@ class MAPPO:
 
       summary_writer.flush()
 
-      if steps >= max_steps:
-        print("episode {}, reached max steps".format(episode))
-        self.save_model("yxppo_episode{}.h5".format(episode))
+      summary_writer.add_graph
+      # if steps >= max_steps:
+      #   print("episode {}, reached max steps".format(episode))
+      #   self.save_model("yxppo_episode{}.h5".format(episode))
 
-      if episode % save_freq == 0:
-        self.save_model("yxppo_episode{}".format(episode))
+      # if episode % save_freq == 0:
+      #   self.save_model("yxppo_episode{}".format(episode))
 
     self.save_model("yxppo_final_episode{}".format(episode))
 
 
 if __name__ == "__main__":
   ppo = MAPPO(n_updates = 4)
-  print(ppo.actor_model.summary())
+  print(ppo.model.summary())
   # print(ppo.critic_model.summary())
-  ppo.train(max_epochs=10000, save_freq=200)
+  # ppo.train(max_epochs=10000, save_freq=200)
