@@ -95,8 +95,6 @@ class PPO:
         return dist
 
     def evaluate_actions(self, state, action):
-        print(state)
-        exit(1)
         output, value = self.policy(state)
         dist = self.get_dist(output)
         if not self.discrete:
@@ -271,6 +269,6 @@ if __name__ == "__main__":
     ppo = PPO(gym_env, discrete=is_discrete)
 
     # ppo.load_model("basic_models/ppo_episode176.h5")
-    ppo.train(max_epochs=1000, save_freq=50)
+    ppo.train(max_epochs=1000, save_freq=200)
     # reward = ppo.test()
     # print("Total rewards: ", reward)

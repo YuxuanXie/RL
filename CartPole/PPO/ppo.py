@@ -25,7 +25,7 @@ class MAPPO:
     clip_ratio=0.2,
     gamma=0.95,
     lam=1.0,
-    batch_size=64,
+    batch_size=128,
     n_updates=4,
   ):
     self.gamma = gamma  # discount factor
@@ -39,17 +39,15 @@ class MAPPO:
 
     self.actor_model = models.Sequential()
     self.actor_model.add(layers.Dense(4, activation="tanh", input_shape=(vector_length,)))
-    self.actor_model.add(layers.Dense(400, activation="tanh"))
-    self.actor_model.add(layers.Dense(300, activation="tanh"))
-    self.actor_model.add(layers.Dense(100, activation="tanh"))
+    self.actor_model.add(layers.Dense(24, activation="tanh"))
+    self.actor_model.add(layers.Dense(16, activation="tanh"))
     self.actor_model.add(layers.Dense(action_length, activation="softmax"))
 
 
     self.critic_model = models.Sequential()
-    self.critic_model.add(layers.Dense(4, activation="tanh", input_shape=(vector_length,)))
-    self.critic_model.add(layers.Dense(400, activation="tanh"))
-    self.critic_model.add(layers.Dense(300, activation="tanh"))
-    self.critic_model.add(layers.Dense(100, activation="tanh"))
+    self.critic_model.add(layers.Dense(4, activation="relu", input_shape=(vector_length,)))
+    self.critic_model.add(layers.Dense(24, activation="relu"))
+    self.critic_model.add(layers.Dense(16, activation="relu"))
     self.critic_model.add(layers.Dense(1))
 
     self.summaries = {}
@@ -60,8 +58,6 @@ class MAPPO:
     return dist
 
   def evaluate_actions(self, states, actions):
-    # states = tf.constant(states)
-    # print(states)
     output = self.actor_model(states)
     value = self.critic(states)
     dist = self.get_dist(output)
@@ -72,12 +68,11 @@ class MAPPO:
   def actor(self, state):
     if len(state.shape) == 1:
       state = np.expand_dims(state, axis=0).astype(np.float64)
-    output = self.actor_model.predict(state)
+    output = self.actor_model(state)
     dist = self.get_dist(output)
 
     action = dist.sample()
     log_probs = dist.log_prob(action)
-
     return action[0].numpy(), log_probs[0].numpy()
 
 
@@ -206,7 +201,7 @@ class MAPPO:
 
 
 if __name__ == "__main__":
-  ppo = MAPPO()
+  ppo = MAPPO(n_updates = 4)
   print(ppo.actor_model.summary())
   # print(ppo.critic_model.summary())
-  ppo.train(max_epochs=1000, save_freq=190)
+  ppo.train(max_epochs=10000, save_freq=200)
