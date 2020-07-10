@@ -5,12 +5,21 @@
     "version": "0.2.0",
     "configurations": [
 
+
         {
             "name": "test1",
             "type": "python",
             "request": "launch",
             "program": "${cwd}/test1.py",
             "console": "integratedTerminal"
-        }
+        },
+
+        {
+            "name": "ppo",
+            "type": "python",
+            "request": "launch",
+            "program": "${cwd}/CartPole/PPO/ppo.py",
+            "console": "integratedTerminal",
+        },
     ]
 }

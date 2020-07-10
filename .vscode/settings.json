@@ -1,5 +1,5 @@
 {
-    "python.pythonPath": "/home/yuxuan/anaconda3/envs/gym_pytorch_env/bin/python",
+    "python.pythonPath": "/home/yuxuan/anaconda3/envs/tf2/bin/python",
     "python.autoComplete.extraPaths": [
         "~/anaconda3/envs/gym_pytorch_env/lib/python3.6/site-packages/**",
         "~/anaconda3/envs/gym_pytorch_env/lib/**",

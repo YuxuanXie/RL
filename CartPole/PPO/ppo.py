@@ -38,16 +38,21 @@ class MAPPO:
     self.model_optimizer = Adam(learning_rate=lr)
 
     self.actor_model = models.Sequential()
-    self.actor_model.add(layers.Dense(4, activation="relu", input_shape=(vector_length,)))
-    self.actor_model.add(layers.Dense(128, activation="relu"))
+    self.actor_model.add(layers.Dense(4, activation="tanh", input_shape=(vector_length,)))
+    self.actor_model.add(layers.Dense(400, activation="tanh"))
+    self.actor_model.add(layers.Dense(300, activation="tanh"))
+    self.actor_model.add(layers.Dense(100, activation="tanh"))
     self.actor_model.add(layers.Dense(action_length, activation="softmax"))
 
 
     self.critic_model = models.Sequential()
-    self.critic_model.add(layers.Dense(4, activation="relu", input_shape=(vector_length,)))
-    self.critic_model.add(layers.Dense(128, activation="relu"))
+    self.critic_model.add(layers.Dense(4, activation="tanh", input_shape=(vector_length,)))
+    self.critic_model.add(layers.Dense(400, activation="tanh"))
+    self.critic_model.add(layers.Dense(300, activation="tanh"))
+    self.critic_model.add(layers.Dense(100, activation="tanh"))
     self.critic_model.add(layers.Dense(1))
 
+    self.summaries = {}
 
 
   def get_dist(self, output):
@@ -55,8 +60,9 @@ class MAPPO:
     return dist
 
   def evaluate_actions(self, states, actions):
-    print(states)
-    output = self.actor_model.predict(states)
+    # states = tf.constant(states)
+    # print(states)
+    output = self.actor_model(states)
     value = self.critic(states)
     dist = self.get_dist(output)
     log_probs = dist.log_prob(actions)
@@ -76,7 +82,8 @@ class MAPPO:
 
 
   def critic(self, state):
-    state = np.expand_dims(state, axis=0).astype(np.float64)
+    if len(state.shape) == 1:
+      state = np.expand_dims(state, axis=0).astype(np.float64)
     return self.critic_model(state)
 
   def get_gaes(self, rewards, v_preds, next_v_preds):
@@ -87,12 +94,15 @@ class MAPPO:
       gaes[t] = gaes[t] + self.lam * self.gamma * gaes[t + 1]
     return gaes
 
+  def save_model(self, fn):
+    self.actor_model.save(fn+"_actor.h5")
+    self.critic_model.save(fn+"_critic.h5")
 
   def learn(self, observations, actions, log_probs, next_v_preds, rewards, gaes):
     rewards = np.expand_dims(rewards, axis=-1).astype(np.float64)
     next_v_preds = np.expand_dims(next_v_preds, axis=-1).astype(np.float64)
 
-    with tf.GradientTape() as tape:
+    with tf.GradientTape(persistent=True) as tape:
       new_log_probs, entropy, state_values = self.evaluate_actions(observations, actions)
 
       ratios = tf.exp(new_log_probs - log_probs)
@@ -109,7 +119,6 @@ class MAPPO:
     
     train_actor_variables = self.actor_model.trainable_variables
     train_critic_variables = self.critic_model.trainable_variables
-    print(train_actor_variables)
 
     grad = tape.gradient(actor_loss, train_actor_variables)  # compute gradient
     self.model_optimizer.apply_gradients(zip(grad, train_actor_variables))
@@ -167,7 +176,7 @@ class MAPPO:
 
         # Tensorboard update
         with summary_writer.as_default():
-          tf.summary.scalar('Loss/total_loss', self.summaries['total_loss'], step=epoch)
+          tf.summary.scalar('Loss/actor_loss', self.summaries['actor_loss'], step=epoch)
           tf.summary.scalar('Loss/clipped_surr', self.summaries['surr_loss'], step=epoch)
           tf.summary.scalar('Loss/vf_loss', self.summaries['vf_loss'], step=epoch)
           tf.summary.scalar('Loss/entropy', self.summaries['entropy'], step=epoch)
@@ -191,13 +200,13 @@ class MAPPO:
         self.save_model("yxppo_episode{}.h5".format(episode))
 
       if episode % save_freq == 0:
-        self.save_model("yxppo_episode{}.h5".format(episode))
+        self.save_model("yxppo_episode{}".format(episode))
 
-    self.save_model("yxppo_final_episode{}.h5".format(episode))
+    self.save_model("yxppo_final_episode{}".format(episode))
 
 
 if __name__ == "__main__":
   ppo = MAPPO()
   print(ppo.actor_model.summary())
   # print(ppo.critic_model.summary())
-  ppo.train(max_epochs=1000, save_freq=50)
+  ppo.train(max_epochs=1000, save_freq=190)
