@@ -89,13 +89,12 @@ def select_action(state, epsilon_threshold):
     return model(Variable(state).type(FloatTensor)).data.max(1)[1].view(1,1)
 
 
-def run_eposide(e, environment, learning_rate):
-  global eps_start
+def run_eposide(e, environment, epsilon_threshold, learning_rate):
   state = environment.reset()
   steps = 0
   while True:
-    environment.render()
-    action = select_action(FloatTensor([state]), eps_start)
+    # environment.render()
+    action = select_action(FloatTensor([state]), epsilon_threshold)
     state_next, reward, done, info = environment.step(action.data[0,0].item())
 
     memory.push([FloatTensor([state]), action, FloatTensor([reward]), FloatTensor([state_next]), FloatTensor([done])])
@@ -104,13 +103,12 @@ def run_eposide(e, environment, learning_rate):
     loss = 0 if(loss == None) else loss
 
     steps+=1
-    eps_start *= 0.995
 
     state = state_next
 
     if(done):
       time_setp.append(steps)
-      print("{2} Episode {0} steps = {1} lr-rate = {3:.2f} explore-rate = {4:.2f} avg = {5:.2f} loss = {6:.2f}".format(e, steps, '\033[92m' if steps >= 195 else '\033[99m', learning_rate, eps_start, statistics.mean(time_setp), loss))
+      print("{2} Episode {0} steps = {1} lr-rate = {3:.2f} explore-rate = {4:.2f} avg = {5:.2f} loss = {6:.2f}".format(e, steps, '\033[92m' if steps >= 195 else '\033[99m', learning_rate, epsilon_threshold, statistics.mean(time_setp), loss))
       break
 
 def learn(learning_rate):
@@ -173,9 +171,9 @@ def learn(learning_rate):
   return loss
 
 for e in range(EPISODES):
-  # epsilon_threshold = eps_end + (eps_start - eps_end) * math.exp(-1.0 * e / eps_decay)
+  epsilon_threshold = eps_end + (eps_start - eps_end) * math.exp(-1.0 * e / eps_decay)
   learning_rate = lr_end + (lr_start - lr_end) * math.exp(-1.0 * e / lr_decay)
-  run_eposide(e, env, learning_rate)
+  run_eposide(e, env, epsilon_threshold, learning_rate)
 
 # print('Complete')
 env.close()
