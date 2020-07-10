@@ -204,5 +204,4 @@ class MAPPO:
 if __name__ == "__main__":
   ppo = MAPPO(n_updates = 4)
   print(ppo.model.summary())
-  # print(ppo.critic_model.summary())
-  # ppo.train(max_epochs=10000, save_freq=200)
+  ppo.train(max_epochs=10000, save_freq=200)
