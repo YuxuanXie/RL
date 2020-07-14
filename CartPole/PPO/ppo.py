@@ -190,7 +190,7 @@ class MAPPO:
 
       summary_writer.flush()
 
-      summary_writer.add_graph
+      # summary_writer.add_graph
       # if steps >= max_steps:
       #   print("episode {}, reached max steps".format(episode))
       #   self.save_model("yxppo_episode{}.h5".format(episode))
@@ -204,4 +204,4 @@ class MAPPO:
 if __name__ == "__main__":
   ppo = MAPPO(n_updates = 4)
   print(ppo.model.summary())
-  ppo.train(max_epochs=10000, save_freq=200)
+  ppo.train(max_epochs=10000, save_freq=2000)

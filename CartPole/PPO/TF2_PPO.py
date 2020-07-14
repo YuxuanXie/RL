@@ -269,6 +269,6 @@ if __name__ == "__main__":
     ppo = PPO(gym_env, discrete=is_discrete)
 
     # ppo.load_model("basic_models/ppo_episode176.h5")
-    ppo.train(max_epochs=1000, save_freq=200)
+    ppo.train(max_epochs=10000, save_freq=2000)
     # reward = ppo.test()
     # print("Total rewards: ", reward)
