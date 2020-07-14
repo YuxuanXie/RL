@@ -190,7 +190,6 @@ class MAPPO:
 
       summary_writer.flush()
 
-      # summary_writer.add_graph
       # if steps >= max_steps:
       #   print("episode {}, reached max steps".format(episode))
       #   self.save_model("yxppo_episode{}.h5".format(episode))
