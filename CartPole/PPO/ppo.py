@@ -103,7 +103,6 @@ class MAPPO:
 
     with tf.GradientTape() as tape:
       new_log_probs, entropy, state_values = self.evaluate_actions(observations, actions)
-
       ratios = tf.exp(new_log_probs - log_probs)
       clipped_ratios = tf.clip_by_value(ratios, clip_value_min=1-self.clip_ratio,
                                         clip_value_max=1+self.clip_ratio)
