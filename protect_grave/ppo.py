@@ -10,21 +10,19 @@ from tensorflow.keras.optimizers import Adam
 
 tfd = tfp.distributions
 tf.keras.backend.set_floatx('float32')
+os.environ["TF_CPP_MIN_LOG_LEVEL"] = "3"
 
 
 """
 
 Received data:
 
-one sample : [5 states], [5 actions], [5 lists of prob and value], [a reward]
+one sample : [5 states], [5 actions], [5 lists of prob and value], [5 reward]
 
 """
 
-inputs = [[[random.random() for x in range(1509)] for _ in range(5)] for i in range(2)]
-# inputs = tf.constant(inputs, dtype=tf.float32)
-# outputs = model(inputs)
+inputs = [[[random.random() for x in range(1509)] for _ in range(5)] for i in range(1000)]
 
-# "slmodel/sv8feature0"
 def load_model(path):
   newest = max(glob.glob(path+"/*"), key = os.path.getctime)
   return tf.saved_model.load(newest)
@@ -49,7 +47,7 @@ class MAPPO:
     self.clip_ratio = clip_ratio  # for clipped surrogate
     self.batch_size = batch_size
     self.n_updates = n_updates  # number of epochs per episode
-    self.model = load_model("slmodel")
+    self.model = load_model("model")
     self.model_optimizer = Adam(learning_rate=lr)
 
   def save_model(self, path):
@@ -65,18 +63,13 @@ class MAPPO:
 
   def get_data(self):
     # obs, actions, log_probs, rewards, v_preds, next_v_preds = [], [], [], [], [], []
-    obs, actions, log_probs_And_v_preds, rewards, next_v_preds = inputs, [[random.randint(0,17) for _ in range(5)] for i in range(2)], [[[random.random() for i in range(2)] for i in range(5)] for i in range(2)], [[100 for i in range(5)] for i in range(2)], [[]]
+    obs, actions, log_probs_And_v_preds, rewards, next_v_preds = inputs, [[random.randint(0,17) for _ in range(5)] for i in range(1000)], [[[random.random() for i in range(2)] for i in range(5)] for i in range(1000)], [[100 for i in range(5)] for i in range(1000)], [[]]
     log_probs = [ [cell[0] for cell in row] for row in log_probs_And_v_preds]
     v_preds = [ [cell[-1] for cell in row] for row in log_probs_And_v_preds]
-    # next_v_preds = [0 for i in range(5)]
     next_v_preds = v_preds[1:] + [[0 for i in range(5)]]
     gaes = self.get_gaes(rewards, v_preds, next_v_preds)
     gaes = np.array(gaes).astype(dtype=np.float32)
     gaes = (gaes - gaes.mean()) / gaes.std()
-    # print(len(self.squeeze(obs)))
-    # print(len(self.squeeze(gaes)))
-    # exit(-1)
-
     return [self.squeeze(obs), self.squeeze(actions), self.squeeze(log_probs), self.squeeze(next_v_preds), self.squeeze(rewards), self.squeeze(gaes)]
 
 
@@ -86,6 +79,7 @@ class MAPPO:
     gaes = copy.deepcopy(deltas)
     for t in reversed(range(len(gaes) - 1)):  # is T-1, where T is time step which run policy
       gaes[t] = gaes[t] + self.lam * self.gamma * gaes[t + 1]
+      
     return gaes
 
   def get_dist(self, output):
@@ -95,11 +89,17 @@ class MAPPO:
   def evaluate_actions(self, states, actions):
     # output= self.model(states)
     # output, value =  [[random.random() for i in range(18)] for _ in range(5)], [random.random() for i in range(5)]
-    output, value =  self.model(states), [random.random() for i in range(5)]
+    output, value =  self.model(states)
     dist = self.get_dist(output)
     log_probs = dist.log_prob(actions)
     entropy = dist.entropy()
     return log_probs, entropy, value
+
+  def sample(self, data):
+    sample_indices = np.random.randint(low=0, high=len(data[0]), size=self.batch_size)
+    sampled_data = [np.take(a=a, indices=sample_indices, axis=0).astype(np.float32) for a in data]
+    return sampled_data
+    
 
   def learn(self, observations, actions, log_probs, next_v_preds, rewards, gaes):
     rewards = np.expand_dims(rewards, axis=-1).astype(np.float32)
@@ -120,25 +120,25 @@ class MAPPO:
       entropy = tf.reduce_mean(entropy)
 
       total_loss = -loss_clip + self.c1 * vf_loss - self.c2 * entropy
-      # total_loss = -loss_clip
 
     train_variables = self.model.trainable_variables
-    # f = open("before_bp.txt", "w")
-    # print(train_variables, file=f)
     grad = tape.gradient(total_loss, train_variables)  # compute gradient
     self.model_optimizer.apply_gradients(zip(grad, train_variables))
-    # f = open("after_bp.txt", "w")
-    # print(train_variables, file=f)
-
+    print("total_loss = {:f} \t loss_clip = {:f} \t vf_loss = {:f} \t entropy = {:f}".format(total_loss, loss_clip, vf_loss, entropy) )
+    
 
 
 
 if __name__ == "__main__":
   mappo = MAPPO()
-  data = mappo.get_data()
-  # print(*data)
-  mappo.learn(*data)
-  mappo.save_model("slmodel")
-  f = open("write.txt", "w")
-  print(mappo.model.trainable_variables, file=f)
+  while True:
+    mappo.model = load_model("model")
+    for i in range(mappo.n_updates):
+      data = mappo.get_data()
+      data = mappo.sample(data)
+      mappo.learn(*data)
+    mappo.save_model("model")
+
+  # f = open("write.txt", "w")
+  # print(mappo.model.trainable_variables, file=f)
 
