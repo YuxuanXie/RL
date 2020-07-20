@@ -1,6 +1,7 @@
 import os
 import glob
 import copy
+import pickle
 import random 
 import datetime
 import numpy as np
@@ -12,6 +13,11 @@ tfd = tfp.distributions
 tf.keras.backend.set_floatx('float32')
 os.environ["TF_CPP_MIN_LOG_LEVEL"] = "3"
 
+import lz4.frame
+import msgpack
+import msgpack_numpy
+
+msgpack_numpy.patch()
 
 """
 
@@ -28,14 +34,15 @@ def load_model(path):
   return tf.saved_model.load(newest)
 
 
+
 class MAPPO:
   def __init__(
     self,
     lr=5e-4,
     c1=1.0,
     c2=0.01,
-    clip_ratio=0.2,
-    gamma=0.95,
+    clip_ratio=0.1,
+    gamma=0.999,
     lam=1.0,
     batch_size=128,
     n_updates=4,
@@ -50,27 +57,56 @@ class MAPPO:
     self.model = load_model("model")
     self.model_optimizer = Adam(learning_rate=lr)
 
+
+  def _data_src(self):
+    _f = pickle.load(open("sample.pkl", "rb"))
+    for each in _f:
+      decompressed = lz4.frame.decompress(each)
+      yield msgpack.unpackb(decompressed)
+
   def save_model(self, path):
     current_time = datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
     tf.saved_model.save(self.model, path + "/" + current_time)
   
   def squeeze(self,unsqueezed_list):
     data = []
-    for row in unsqueezed_list:
-      for cell in row:
-        data.append(cell)
+    for d1 in unsqueezed_list:
+      for d2 in d1:
+        for d3 in d2:
+          data.append(d3)
     return data
 
   def get_data(self):
-    # obs, actions, log_probs, rewards, v_preds, next_v_preds = [], [], [], [], [], []
-    obs, actions, log_probs_And_v_preds, rewards, next_v_preds = inputs, [[random.randint(0,17) for _ in range(5)] for i in range(1000)], [[[random.random() for i in range(2)] for i in range(5)] for i in range(1000)], [[100 for i in range(5)] for i in range(1000)], [[]]
-    log_probs = [ [cell[0] for cell in row] for row in log_probs_And_v_preds]
-    v_preds = [ [cell[-1] for cell in row] for row in log_probs_And_v_preds]
-    next_v_preds = v_preds[1:] + [[0 for i in range(5)]]
-    gaes = self.get_gaes(rewards, v_preds, next_v_preds)
-    gaes = np.array(gaes).astype(dtype=np.float32)
-    gaes = (gaes - gaes.mean()) / gaes.std()
-    return [self.squeeze(obs), self.squeeze(actions), self.squeeze(log_probs), self.squeeze(next_v_preds), self.squeeze(rewards), self.squeeze(gaes)]
+    eposides = self._data_src()
+    # dict_keys([b'state', b'action', b'reward', b'done', b'probs', b'values'])
+    obs, actions, probs, v_preds, rewards, next_v_preds, gaes_final = [],[],[],[],[],[],[]
+    for e in eposides:
+      obs.append(e[b"state"])
+      actions.append(e[b"action"])
+      probs.append(e[b"probs"])
+      rewards_temp = e[b"reward"]
+      rewards.append(rewards_temp)
+      v_preds = e[b'values']
+
+      next_v_preds_temp = v_preds[1:] + [[0 for i in range(5)]]
+      next_v_preds.append(next_v_preds_temp)
+      gaes = self.get_gaes(rewards_temp, v_preds, next_v_preds_temp)
+      gaes = np.array(gaes).astype(dtype=np.float32)
+      gaes = (gaes - gaes.mean()) / gaes.std()
+      gaes_final.append(gaes)
+
+    log_probs = self.get_dist(self.squeeze(probs)).log_prob(self.squeeze(actions))
+    
+    return [self.squeeze(obs), self.squeeze(actions), log_probs, self.squeeze(next_v_preds), self.squeeze(rewards), self.squeeze(gaes_final)]
+
+    # for ele in data :
+    #   print(np.asarray(ele).shape)
+
+    # v_preds = [ [cell[-1] for cell in row] for row in log_probs_And_v_preds]
+    # next_v_preds = v_preds[1:] + [[0 for i in range(5)]]
+    # gaes = self.get_gaes(rewards, v_preds, next_v_preds)
+    # gaes = np.array(gaes).astype(dtype=np.float32)
+    # gaes = (gaes - gaes.mean()) / gaes.std()
 
 
   def get_gaes(self, rewards, v_preds, next_v_preds):
@@ -79,7 +115,6 @@ class MAPPO:
     gaes = copy.deepcopy(deltas)
     for t in reversed(range(len(gaes) - 1)):  # is T-1, where T is time step which run policy
       gaes[t] = gaes[t] + self.lam * self.gamma * gaes[t + 1]
-      
     return gaes
 
   def get_dist(self, output):
@@ -87,8 +122,6 @@ class MAPPO:
     return dist
 
   def evaluate_actions(self, states, actions):
-    # output= self.model(states)
-    # output, value =  [[random.random() for i in range(18)] for _ in range(5)], [random.random() for i in range(5)]
     output, value =  self.model(states)
     dist = self.get_dist(output)
     log_probs = dist.log_prob(actions)
@@ -130,14 +163,23 @@ class MAPPO:
 
 
 if __name__ == "__main__":
-  mappo = MAPPO()
-  while True:
-    mappo.model = load_model("model")
-    for i in range(mappo.n_updates):
-      data = mappo.get_data()
-      data = mappo.sample(data)
-      mappo.learn(*data)
-    mappo.save_model("model")
+  mappo = MAPPO(n_updates = 128, batch_size=4)
+  data = mappo.get_data()
+
+  if np.any(np.isnan(data[0])) : 
+    print("nan")
+    exit(-1)
+
+  # mappo.model = load_model("model")
+  for i in range(mappo.n_updates):
+    sample = mappo.sample(data)
+    for ele in sample:
+      if np.any(np.isnan(ele)) : 
+        print("nan")
+        exit(-1)
+      
+    mappo.learn(*sample)
+  # mappo.save_model("model")
 
   # f = open("write.txt", "w")
   # print(mappo.model.trainable_variables, file=f)
