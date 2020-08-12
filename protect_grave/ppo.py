@@ -13,11 +13,11 @@ tfd = tfp.distributions
 tf.keras.backend.set_floatx('float32')
 os.environ["TF_CPP_MIN_LOG_LEVEL"] = "3"
 
-import lz4.frame
-import msgpack
-import msgpack_numpy
+# import lz4.frame
+# import msgpack
+# import msgpack_numpy
 
-msgpack_numpy.patch()
+# msgpack_numpy.patch()
 
 """
 
@@ -31,6 +31,7 @@ inputs = [[[random.random() for x in range(1509)] for _ in range(5)] for i in ra
 
 def load_model(path):
   newest = max(glob.glob(path+"/*"), key = os.path.getctime)
+  print(newest)
   return tf.saved_model.load(newest)
 
 
@@ -58,11 +59,11 @@ class MAPPO:
     self.model_optimizer = Adam(learning_rate=lr)
 
 
-  def _data_src(self):
-    _f = pickle.load(open("sample.pkl", "rb"))
-    for each in _f:
-      decompressed = lz4.frame.decompress(each)
-      yield msgpack.unpackb(decompressed)
+  # def _data_src(self):
+  #   _f = pickle.load(open("sample.pkl", "rb"))
+  #   for each in _f:
+  #     decompressed = lz4.frame.decompress(each)
+  #     yield msgpack.unpackb(decompressed)
 
   def save_model(self, path):
     current_time = datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
@@ -76,8 +77,8 @@ class MAPPO:
           data.append(d3)
     return data
 
-  def get_data(self):
-    eposides = self._data_src()
+  def get_data(self, eposides):
+    # eposides = self._data_src()
     # dict_keys([b'state', b'action', b'reward', b'done', b'probs', b'values'])
     obs, actions, probs, v_preds, rewards, next_v_preds, gaes_final = [],[],[],[],[],[],[]
     for e in eposides:
@@ -161,26 +162,44 @@ class MAPPO:
     
 
 
+def check_nan(data):
+  for ele in data:
+    if np.any(np.isnan(ele)) : 
+      return True
+  return False
+
 
 if __name__ == "__main__":
   mappo = MAPPO(n_updates = 128, batch_size=4)
-  data = mappo.get_data()
+  episodes = []
 
-  if np.any(np.isnan(data[0])) : 
-    print("nan")
-    exit(-1)
 
-  # mappo.model = load_model("model")
-  for i in range(mappo.n_updates):
-    sample = mappo.sample(data)
-    for ele in sample:
-      if np.any(np.isnan(ele)) : 
-        print("nan")
-        exit(-1)
-      
-    mappo.learn(*sample)
-  # mappo.save_model("model")
+  while True:
+    print("------------------- load model -----------------------")
+    mappo.model = load_model("model")
 
-  # f = open("write.txt", "w")
-  # print(mappo.model.trainable_variables, file=f)
+    for _ in range(20):
+      episodes.append({
+        b"state": [np.random.rand(5, 1509)] * 100,
+        b"action": [[random.randint(0, 17) for _ in range(5)]] * 100,
+        b"reward": [[random.random() for _ in range(5)]] * 100,
+        b"done": [[random.random() for _ in range(5)]] * 100,
+        b"probs": [ np.random.rand(5, 18)] * 100,
+        b"values": [[random.random() for _ in range(5)]] * 100,
+      })  
+
+    data = mappo.get_data(episodes)
+
+    for i in range(mappo.n_updates):
+      while True:
+        sample = mappo.sample(data)
+        if check_nan(sample) == False:
+          break
+      mappo.learn(*sample)
+
+    print("------------------- save model -----------------------")
+    mappo.save_model("model")
+
+    # f = open("write.txt", "w")
+    # print(mappo.model.trainable_variables, file=f)
 
