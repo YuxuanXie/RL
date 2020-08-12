@@ -1,10 +1,11 @@
 {
-    "python.pythonPath": "/home/yuxuan/anaconda3/envs/tf2/bin/python",
+    "python.pythonPath": "/Users/yuxuan/anaconda3/envs/starcraft/bin/python",
     "python.autoComplete.extraPaths": [
-        "~/anaconda3/envs/gym_pytorch_env/lib/python3.6/site-packages/**",
-        "~/anaconda3/envs/gym_pytorch_env/lib/**",
-        "~/anaconda3/lib/*"],
+        "/Users/yuxuan/anaconda3/envs/starcraft/lib/python3.6/site-packages/smac/**",
+    ],
     "python.linting.pylintPath": "pylint",
     "python.terminal.activateEnvInCurrentTerminal": false,
-    "python.terminal.activateEnvironment": true
+    "python.terminal.activateEnvironment": true,
+    "terminal.external.osxExec": "iTerm.app",
+    "terminal.explorerKind": "external",
 }

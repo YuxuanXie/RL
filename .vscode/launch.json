@@ -10,8 +10,8 @@
             "name": "test1",
             "type": "python",
             "request": "launch",
-            "program": "${cwd}/test1.py",
-            "console": "integratedTerminal"
+            "program": "${cwd}/starcraft/test.py",
+            "console": "externalTerminal"
         },
 
         {
