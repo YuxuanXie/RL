@@ -51,6 +51,17 @@ SIZE = 50
 f = open("result.csv", "w")
 f.write("timesteps,trial\n")
 
+
+def select_action(observation):
+    output = actor(torch.from_numpy(observation))
+    if random.random() < epsilon_:
+      action = env.action_space.sample()
+      Qvalue = output[action]
+    else:
+      Qvalue, action = torch.max(output,0)
+      action = action.item()
+    return output, action
+
 for eposide in range(300):
   epsilon_ = eps_end + (eps_start - eps_end) * math.exp(-1.0 * eposide / eps_decay)
   learning_rate = lr_end + (lr_start - lr_end) * math.exp(-1.0 * eposide / lr_decay)
@@ -60,13 +71,7 @@ for eposide in range(300):
   for t in range(200):
     env.render()
     #Greedy action
-    output = actor(torch.from_numpy(observation))
-    if random.random() < epsilon_:
-      action = env.action_space.sample()
-      Qvalue = output[action]
-    else:
-      Qvalue, action = torch.max(output,0)
-      action = action.item()
+    output, action = select_action(observation)
 
     observation_next, reward, done, info = env.step(action)
     # replay_exp.append((observation, action, reward, observation_next))
@@ -92,5 +97,6 @@ for eposide in range(300):
       f.write("{},{} \n".format(t+1,eposide))
       print("Episode {} finished after {} timesteps and average = {:.2f}                           ".format(eposide, t+1, statistics.mean(time_setp)))
       break
+  
 f.close()
 env.close()

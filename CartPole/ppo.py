@@ -1,10 +1,27 @@
+
+###############
+### 所有的包 ###
+###############
+
 import torch
 import torch.nn as nn
 from torch.distributions import Categorical
 import gym
+import datetime
+from tensorboard_logger import configure, log_value
 
+configure("./log/" + datetime.datetime.now().strftime("%Y%m%d-%H%M%S"))
+
+
+# 如果有gpu， 就用gpu， 如果没有，就用cpu
 device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
+# 写结果文件
+# f = open("result.csv", "w")
+# f.write("timesteps,trial,loss\n")
+
+
+# 经验池，用于存储一个阶段的历史信息，用于学习
 class Memory:
     def __init__(self):
         self.actions = []
@@ -13,6 +30,7 @@ class Memory:
         self.rewards = []
         self.is_terminals = []
     
+    ## 清除内存
     def clear_memory(self):
         del self.actions[:]
         del self.states[:]
@@ -20,11 +38,15 @@ class Memory:
         del self.rewards[:]
         del self.is_terminals[:]
 
+
+
+# 算法
 class ActorCritic(nn.Module):
     def __init__(self, state_dim, action_dim, n_latent_var):
         super(ActorCritic, self).__init__()
 
-        # actor
+        # actor 和 critic 网络的结构最后一层不同
+        # actor网络的结构
         self.action_layer = nn.Sequential(
                 nn.Linear(state_dim, n_latent_var),
                 nn.Tanh(),
@@ -34,7 +56,7 @@ class ActorCritic(nn.Module):
                 nn.Softmax(dim=-1)
                 )
         
-        # critic
+        # critic网络的结构
         self.value_layer = nn.Sequential(
                 nn.Linear(state_dim, n_latent_var),
                 nn.Tanh(),
@@ -85,7 +107,7 @@ class PPO:
         self.MseLoss = nn.MSELoss()
     
     def update(self, memory):   
-        # Monte Carlo estimate of state rewards:
+        # 奖励的蒙特卡洛估计
         rewards = []
         discounted_reward = 0
         for reward, is_terminal in zip(reversed(memory.rewards), reversed(memory.is_terminals)):
@@ -94,7 +116,7 @@ class PPO:
             discounted_reward = reward + (self.gamma * discounted_reward)
             rewards.insert(0, discounted_reward)
         
-        # Normalizing the rewards:
+        # reward归一化
         rewards = torch.tensor(rewards).to(device)
         rewards = (rewards - rewards.mean()) / (rewards.std() + 1e-5)
         
@@ -103,15 +125,16 @@ class PPO:
         old_actions = torch.stack(memory.actions).to(device).detach()
         old_logprobs = torch.stack(memory.logprobs).to(device).detach()
         
-        # Optimize policy for K epochs:
+        # 优化k个epochs
         for _ in range(self.K_epochs):
-            # Evaluating old actions and values :
+            # 评价旧的动作和其价值估计
+
             logprobs, state_values, dist_entropy = self.policy.evaluate(old_states, old_actions)
             
-            # Finding the ratio (pi_theta / pi_theta__old):
+            # 求 ratio (pi_theta / pi_theta__old):
             ratios = torch.exp(logprobs - old_logprobs.detach())
                 
-            # Finding Surrogate Loss:
+            # 求 Surrogate Loss:
             advantages = rewards - state_values.detach()
             surr1 = ratios * advantages
             surr2 = torch.clamp(ratios, 1-self.eps_clip, 1+self.eps_clip) * advantages
@@ -124,6 +147,7 @@ class PPO:
         
         # Copy new weights into old policy:
         self.policy_old.load_state_dict(self.policy.state_dict())
+        return loss
         
 def main():
     ############## Hyperparameters ##############
@@ -133,12 +157,12 @@ def main():
     state_dim = env.observation_space.shape[0]
     action_dim = 2
     render = False
-    solved_reward = 230         # stop training if avg_reward > solved_reward
-    log_interval = 20           # print avg reward in the interval
-    max_episodes = 50000        # max training episodes
-    max_timesteps = 300         # max timesteps in one episode
-    n_latent_var = 64           # number of variables in hidden layer
-    update_timestep = 2000      # update policy every n timesteps
+    solved_reward = 230         # 停止训练的条件 if avg_reward > solved_reward
+    log_interval = 20           # 打log间隔
+    max_episodes = 1000         # 最大训练次数
+    max_timesteps = 300         # 一局游戏最大决策步数
+    n_latent_var = 64           # 网络结构隐藏层的cell数目
+    update_timestep = 2000      # 每update_timestep个step更新policy network
     lr = 0.002
     betas = (0.9, 0.999)
     gamma = 0.99                # discount factor
@@ -159,42 +183,46 @@ def main():
     running_reward = 0
     avg_length = 0
     timestep = 0
+    all_timestep = 0
     
     # training loop
     for i_episode in range(1, max_episodes+1):
         state = env.reset()
         for t in range(max_timesteps):
             timestep += 1
+            all_timestep += 1
             
-            # Running policy_old:
+            # 用旧的策略产生数据
             action = ppo.policy_old.act(state, memory)
             state, reward, done, _ = env.step(action)
             
-            # Saving reward and is_terminal:
+            # 保存奖励 和 is_terminal:
             memory.rewards.append(reward)
             memory.is_terminals.append(done)
             
-            # update if its time
+            # 更新
             if timestep % update_timestep == 0:
-                ppo.update(memory)
+                loss = ppo.update(memory)
                 memory.clear_memory()
                 timestep = 0
+                log_value("data/loss", loss.mean(), all_timestep)
             
             running_reward += reward
             if render:
                 env.render()
             if done:
+                # f.write("{},{} \n".format(t+1,i_episode))
+                log_value("data/reward", t+1, i_episode)
                 break
                 
         avg_length += t
         
-        # stop training if avg_reward > solved_reward
         if running_reward > (log_interval*solved_reward):
             print("########## Solved! ##########")
             torch.save(ppo.policy.state_dict(), './PPO_{}.pth'.format(env_name))
             break
             
-        # logging
+        # 打log
         if i_episode % log_interval == 0:
             avg_length = int(avg_length/log_interval)
             running_reward = int((running_reward/log_interval))
@@ -205,3 +233,4 @@ def main():
             
 if __name__ == '__main__':
     main()
+    # f.close()
