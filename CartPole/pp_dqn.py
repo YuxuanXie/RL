@@ -6,6 +6,7 @@ import torch.nn as nn
 import torch.optim as optim
 import torch.nn.functional as F
 from torch.autograd.variable import Variable
+from gym.spaces import Tuple, Discrete
 
 from datetime import datetime
 from per.prioritized_memory import Memory
@@ -76,7 +77,7 @@ class DQN():
             state = Variable(state).float().cpu()
             qs = self.model(state)
             _, action = torch.max(qs, -1)
-            action = action.item()
+            action = action.detach().numpy()
         return action
 
     # Save the (s, a, r, s', done) to the replay buffer
@@ -85,8 +86,7 @@ class DQN():
         q_next = self.target_model(Variable(torch.FloatTensor(state_next)))
 
         target = reward + (1-int(done)) * self.discount_factor * torch.max(q_next)
-
-        error = torch.abs(q[0][action] - target)
+        error = torch.abs(q[action] - target)
 
         self.memory.add(error.detach(), (state, action, reward, state_next, done))
     
@@ -139,35 +139,70 @@ class DQN():
         return loss
 
 
+# Parrallize the environment
+class vectorEnv():
+
+    def __init__(self, env_creater, n):
+        self.envs = [env_creater() for _ in range(n)]
+        self.action_space = Tuple([env.action_space for env in self.envs])
+        self.score = [0 for _ in range(n)]
+        self.episode = [0 for _ in range(n)]
+
+    def reset(self):
+        self.score = [0 for _ in range(len(self.score))]
+        return [env.reset() for env in self.envs]
+
+    def step(self, actions):
+        ts = []
+        for i, env in enumerate(self.envs):
+            state_next, reward, done, info = env.step(actions[i])
+            ts.append([reward, done, info, state_next])
+            self.score[i] += reward
+            if done:
+                state_next = env.reset()
+                print(f"env-{i} episode-{self.episode[i]} score = {self.score[i]}")
+                self.score[i] = 0
+                self.episode[i] += 1
+        
+        return ts
+    
+    def close(self):
+        for env in self.envs:
+            env.close()
+
+
+
 if __name__ == '__main__':
-    env = gym.make('CartPole-v1')
-    state_size = env.observation_space.shape[0]
-    action_size = env.action_space.n
+    env_creater = lambda : gym.make('CartPole-v1')
+    env = vectorEnv(env_creater, 2)
+
+    single_env = env_creater()
+    state_size = single_env.observation_space.shape[0]
+    action_size = single_env.action_space.n
 
     agent = DQN(state_size, action_size)
 
     for e in range(int(1e3)):
-        done = False
-        score = 0
-        state = env.reset()
-        state = np.reshape(state, [1, state_size])
-        while not done:
-            if agent.render:
-                env.render()
-            
-            action = agent.get_action(state)
-            state_next, reward, done, info = env.step(action)
-            state_next = np.reshape(state_next, [1, state_size])
-            agent.add_sample(state, action, reward, state_next, done)
-            state = state_next
+        states = env.reset()
+        states = np.reshape(states, [-1, state_size])
 
-            score += reward
+        while True:    
+            actions = agent.get_action(states)
+
+            ts = env.step(actions)
+            state_nexts = np.array(ts).transpose()[-1]
+
+            state_nexts = []
+            for s, each_t, a in zip(states, ts, actions):
+                reward, done, _, s_next = each_t
+                agent.add_sample(s, a, reward, s_next, done)
+                state_nexts.append(s_next.tolist())
+
+            states = np.array(state_nexts)
 
             if agent.memory.tree.n_entries >= agent.batch_size:
                 agent.train()
 
-            if done:
-                print(f"episode = {e} score = {score}")
 
 
 
