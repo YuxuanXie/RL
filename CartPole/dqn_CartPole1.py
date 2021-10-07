@@ -14,7 +14,7 @@ EPISODES = 200  # number of episodes
 GAMMA = 0.95  # Q-learning discount factor
 LR = 0.01  # NN optimizer learning rate
 HIDDEN_LAYER = 48  # NN hidden layer size
-BATCH_SIZE = 16 # Q-learning batch size
+BATCH_SIZE = 64 # Q-learning batch size
 
 eps_end = 0.01
 eps_start = 1
@@ -58,13 +58,13 @@ class Network(nn.Module):
     x = self.l2(x)
     return x
 
-  def fit(self, input, expected_output):
-    for i in range(10):
-      loss = F.mse_loss(self.forward(input), expected_output)
-      optimizer.zero_grad()
-      loss.backward(retain_graph=True)
-      optimizer.step()
-    return loss
+  # def fit(self, input, expected_output):
+  #   for i in range(10):
+  #     loss = F.mse_loss(self.forward(input), expected_output)
+  #     optimizer.zero_grad()
+  #     loss.backward(retain_graph=True)
+  #     optimizer.step()
+  #   return loss
 
 
 
@@ -73,7 +73,7 @@ model = Network()
 model = model.double()
 
 
-memory = ReplayMemory(1000)
+memory = ReplayMemory(10000)
 optimizer = optim.Adagrad(model.parameters(), LR)
 steps_done = 0
 time_setp = []
@@ -128,45 +128,13 @@ def learn(learning_rate):
     target_q_values = current_q_values.clone()
     target_q_values[0,action] = target 
 
-    loss = model.fit(state, target_q_values)
+    # loss = model.fit(state, target_q_values)
 
-    # loss = F.mse_loss(current_q_values, target_q_values)
+    loss = F.mse_loss(current_q_values, target_q_values)
     
-    # optimizer.zero_grad()
-    # loss.backward()
-    # optimizer.step()
-
-
-  # batch_state, batch_action, batch_reward, batch_next_state, done = zip(*transitions)
-
-  # batch_state = Variable(torch.cat(batch_state))
-  # batch_action = Variable(torch.cat(batch_action))
-  # batch_reward = Variable(torch.cat(batch_reward)).view(BATCH_SIZE,1)
-  # batch_next_state = Variable(torch.cat(batch_next_state))
-  # batch_done = 1 - Variable(torch.cat(done)).view(BATCH_SIZE,1)
-
-
-  # current_q_values = model(batch_state).gather(1,batch_action)
-  # max_next_q_values = model(batch_next_state).max(1)[0].view(BATCH_SIZE,1)
-  # expected_q_values = batch_reward + GAMMA * max_next_q_values.mul(batch_done) 
-  # # error = learning_rate*(batch_reward + GAMMA * max_next_q_values  - current_q_values)
-  # # expected_q_values = current_q_values +  error.mul(batch_done)
-
-  # # print(batch_reward.view(BATCH_SIZE,1))
-  # # print("------current_q_values--------")
-  # # print(current_q_values)
-  # # print("-------max_next_q_values-------")
-  # # print(max_next_q_values)
-  # # print("---------expected_q_values-----")
-  # # print(expected_q_values)
-  # # print("---------batch_done-----")
-  # # print(batch_done.view(BATCH_SIZE,1))
-  # # exit(0)
-
-  # optimizer.zero_grad()
-  # loss = F.nll_loss(current_q_values, expected_q_values)
-  # loss.backward()
-  # optimizer.step()
+    optimizer.zero_grad()
+    loss.backward()
+    optimizer.step()
 
   return loss
 

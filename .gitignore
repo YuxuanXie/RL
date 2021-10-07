@@ -1,5 +1,8 @@
 *.h5
+__init__.py
+__pycache__
 */logs
+log
 *logs/*
 */slmodel
 */model/*

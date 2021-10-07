@@ -7,7 +7,7 @@ class sumTree():
         self.writer = 0
         self.tree = np.zeros(2*self.capacity - 1)
         self.data = np.zeros(self.capacity, dtype=object)
-        self.n_entreis = 0
+        self.n_entries = 0
 
 
     # Return the total sum, which is the value of the root
@@ -26,13 +26,13 @@ class sumTree():
         left = 2 * idx + 1
         right = 2 * idx + 2
 
-        if left >= 2*self.capacity - 1:
-            return left
+        if left >= len(self.tree):
+            return idx
         
         if self.tree[left] >= s:
-            self._retrive(left, s)
+            return self._retrive(left, s)
         else:
-            self._retrive(right, s - self.tree[left])
+            return self._retrive(right, s - self.tree[left])
 
     # Add new data to the sum tree based on the priority
     # p : priority
@@ -47,11 +47,11 @@ class sumTree():
         if self.writer >= self.capacity:
             self.writer = 0
         
-        if self.n_entreis < self.capacity:
-            self.n_entreis += 1
+        if self.n_entries < self.capacity:
+            self.n_entries += 1
 
     # Update the priority
-    def update(self, idx, p)
+    def update(self, idx, p):
         change = p - self.tree[idx]
 
         self.tree[idx] = p
