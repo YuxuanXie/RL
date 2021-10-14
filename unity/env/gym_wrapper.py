@@ -1,7 +1,14 @@
 import numpy as np
 from .multiagentenv import MultiAgentEnv
 from mlagents_envs.environment import UnityEnvironment
-
+from mlagents_envs.side_channel import SideChannel, IncomingMessage, OutgoingMessage
+from mlagents_envs.side_channel.raw_bytes_channel import RawBytesChannel
+from mlagents_envs.side_channel.side_channel_manager import SideChannelManager
+from mlagents_envs.side_channel.environment_parameters_channel import EnvironmentParametersChannel
+from mlagents_envs.side_channel.engine_configuration_channel import (
+    EngineConfigurationChannel,
+    EngineConfig,
+)
 
 class unityEnv(MultiAgentEnv):
     "The gym wrapper for multi-agent unity environemnt"
@@ -18,7 +25,10 @@ class unityEnv(MultiAgentEnv):
         """
         # Env args
         self.name = bin_path.replace(".app", "").split('/')[-1]
-        self._env = UnityEnvironment(file_name=bin_path)
+        self.engine_config_channel = EngineConfigurationChannel()
+        self.parameter_config_channel = EnvironmentParametersChannel()
+
+        self._env = UnityEnvironment(file_name=bin_path, side_channels=[self.engine_config_channel, self.parameter_config_channel] )
         self._env.reset()
 
         # Observation args
@@ -34,6 +44,10 @@ class unityEnv(MultiAgentEnv):
         self.decision_steps, self.terminal_steps = self._env.get_steps(self.behavior_name)
         self.n_agents = len(self.decision_steps)
         self.n_agent_ids = self.decision_steps.agent_id
+        
+        # Use side channel to config unity env
+        self.engine_config_channel.set_configuration_parameters(time_scale=20)
+        self.parameter_config_channel.set_float_parameter("checkpoint_radius", 50)
 
 
     def _extract_decision_info(self, decision_steps, terminated=False):
@@ -51,8 +65,6 @@ class unityEnv(MultiAgentEnv):
                 action_mask = agent_info.action_mask
 
         return obs, reward, action_mask
-
-
 
 
     def step(self, actions):

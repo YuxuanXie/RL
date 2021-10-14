@@ -9,27 +9,27 @@ from torch.autograd import Variable
 
 
 class model(nn.Module):
-    def __init__(self, observation_shape, action_shape, hidden_size=64):
+    def __init__(self, observation_shape, action_shape, hidden_size=256):
         super().__init__()
         self.observation_shape = observation_shape
         self.action_shape = action_shape
-        self.hidden_size = hidden_size
+        self.hidden_layers = [hidden_size, int(hidden_size/2)]
         
-        self.f1 = nn.Linear(self.observation_shape, self.hidden_size)
-        self.f2 = nn.Linear(self.hidden_size, self.hidden_size)
+        self.f1 = nn.Linear(self.observation_shape, self.hidden_layers[0])
+        self.f2 = nn.Linear(self.hidden_layers[0], self.hidden_layers[1])
 
         # Action head
-        self.logits = [nn.Linear(self.hidden_size, output_size) for output_size in self.action_shape]
+        self.logits = [nn.Linear(self.hidden_layers[1], output_size) for output_size in self.action_shape]
 
         # Value head
-        self.value = nn.Linear(self.hidden_size, 1)
+        self.value = nn.Linear(self.hidden_layers[1], 1)
 
 
     def forward(self, obs):
         x = F.relu(self.f1(obs))
         x = F.relu(self.f2(x))
         logits = [head(x) for head in self.logits]
-        probs = [F.softmax(each) for each in logits]
+        probs = [F.softmax(each, dim=-1) for each in logits]
         value = self.value(x)
         return probs, value
 
@@ -38,15 +38,15 @@ class PPO():
     def __init__(self, 
             observation_shape,
             action_shape,
-            learning_rate=1e-3,
+            learning_rate=1e-4,
             gamma = 0.9,
             lam = 0.8,
             batch_size = 64,
-            n_updates = 4,
+            n_updates = 8,
             clip_ratio = 0.1,
             c1 = 1.0,
-            c2 = 0.1,
-            hidden_size=64):
+            c2 = 0.01,
+            hidden_size=128):
 
         # Env parameters
         self.observation_shape = observation_shape
@@ -61,6 +61,8 @@ class PPO():
         self.clip_ratio = clip_ratio
         self.c1 = c1
         self.c2 = c2
+        self.update_steps = 0
+        self.gradient_nrom = 10
 
         # Model
         self.model = model(observation_shape, action_shape, hidden_size)
@@ -73,7 +75,7 @@ class PPO():
     def weights_init(self, m):
         classname = m.__class__.__name__
         if classname.find('Linear') != -1:
-            torch.nn.init.xavier_uniform(m.weight)
+            torch.nn.init.xavier_uniform_(m.weight)
 
     # Return distributions of all action dimension 
     # For all agents
@@ -96,7 +98,7 @@ class PPO():
             dist = self.get_dist(probs)
             values[agent_id] = v[0]
             action[agent_id] = [d.sample() for d in dist]
-            log_prob[agent_id] = np.prod([d.log_prob(a) for d, a in zip(dist, action[agent_id])]).item()
+            log_prob[agent_id] = sum([d.log_prob(a) for d, a in zip(dist, action[agent_id])]).item()
 
         return action, values, log_prob
 
@@ -113,18 +115,35 @@ class PPO():
     # Input obs : n * self.observation_shape
     # Input actions : n * self.action_shape
 
+    # def evaluate_actions(self, obs, actions):
+    #     outputs, values = self.model(obs)
+    #     # Get distributions for tree dimension  dist[n]-> action_dimension n 
+    #     dist = np.array([self.get_dist(output) for output in outputs])
+    #     dist = dist.transpose()
+    #     log_prob = []
+    #     entropy = []
+    #     for d, a in zip(dist, actions):
+    #         log_prob.append(np.prod([each_d.log_prob(each_a) for each_d, each_a in zip(d,a)]))
+    #         entropy.append(sum([each_d.entropy() for each_d in d])/len(d))
+
+    #     return torch.stack(log_prob), values, torch.stack(entropy)
+
     def evaluate_actions(self, obs, actions):
         outputs, values = self.model(obs)
         # Get distributions for tree dimension  dist[n]-> action_dimension n 
-        dist = np.array([self.get_dist(output) for output in outputs])
-        dist = dist.transpose()
+        
+        dist = [distributions.Categorical(output) for output in outputs]
+        actions = actions.transpose(0,1)
         log_prob = []
         entropy = []
         for d, a in zip(dist, actions):
-            log_prob.append(np.prod([each_d.log_prob(each_a) for each_d, each_a in zip(d,a)]))
-            entropy.append(sum([each_d.entropy() for each_d in d])/len(d))
+            log_prob.append(d.log_prob(a))
+            entropy.append(d.entropy())
 
-        return torch.stack(log_prob), values, torch.stack(entropy)
+        entropy = sum(entropy) / len(entropy)
+        log_prob = sum(log_prob)
+
+        return log_prob, values, entropy
 
     # For one agent
     def learn(self, obs, actions, log_probs, next_v_preds, rewards, gaes):
@@ -149,5 +168,10 @@ class PPO():
 
         self.optimizer.zero_grad()
         total_loss.backward()
+        nn.utils.clip_grad_norm_(self.model.parameters(), self.gradient_nrom)
         self.optimizer.step()
+
+        self.update_steps += 1
+
+        return total_loss, loss_clip, vf_loss, entropy
 
