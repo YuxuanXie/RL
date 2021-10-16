@@ -17,12 +17,15 @@ class model(nn.Module):
         
         self.f1 = nn.Linear(self.observation_shape, self.hidden_layers[0])
         self.f2 = nn.Linear(self.hidden_layers[0], self.hidden_layers[1])
-
         # Action head
         self.logits = [nn.Linear(self.hidden_layers[1], output_size) for output_size in self.action_shape]
 
         # Value head
-        self.value = nn.Linear(self.hidden_layers[1], 1)
+        self.value = nn.Sequential(
+            nn.Linear(self.observation_shape, self.hidden_layers[1]),
+            nn.ReLU(),
+            nn.Linear(self.hidden_layers[1], 1)
+        )
 
 
     def forward(self, obs):
@@ -30,7 +33,7 @@ class model(nn.Module):
         x = F.relu(self.f2(x))
         logits = [head(x) for head in self.logits]
         probs = [F.softmax(each, dim=-1) for each in logits]
-        value = self.value(x)
+        value = self.value(obs)
         return probs, value
 
 
@@ -38,14 +41,14 @@ class PPO():
     def __init__(self, 
             observation_shape,
             action_shape,
-            learning_rate=1e-4,
+            learning_rate=1e-5,
             gamma = 0.9,
             lam = 0.8,
-            batch_size = 64,
-            n_updates = 8,
-            clip_ratio = 0.1,
+            batch_size = 128,
+            n_updates = 4,
+            clip_ratio = 0.3,
             c1 = 1.0,
-            c2 = 0.01,
+            c2 = 0.00,
             hidden_size=128):
 
         # Env parameters
@@ -66,7 +69,7 @@ class PPO():
 
         # Model
         self.model = model(observation_shape, action_shape, hidden_size)
-        self.model.apply(self.weights_init)
+        # self.model.apply(self.weights_init)
 
         # Optimizer
         self.optimizer = optim.Adam(self.model.parameters(), lr=self.learning_rate)
@@ -131,7 +134,6 @@ class PPO():
     def evaluate_actions(self, obs, actions):
         outputs, values = self.model(obs)
         # Get distributions for tree dimension  dist[n]-> action_dimension n 
-        
         dist = [distributions.Categorical(output) for output in outputs]
         actions = actions.transpose(0,1)
         log_prob = []
@@ -157,14 +159,14 @@ class PPO():
         ratio = torch.exp(new_log_probs - log_probs)
         clipped_ratios = torch.clip(ratio, 1-self.clip_ratio, 1+self.clip_ratio)
 
-        loss_clip = torch.minimum(gaes*ratio, gaes*clipped_ratios)
+        loss_clip = torch.min(gaes*ratio, gaes*clipped_ratios)
         loss_clip = torch.mean(loss_clip)
 
         target_values = rewards + self.gamma * next_v_preds
         vf_loss = torch.mean(torch.square(state_values - target_values))
         entropy = torch.mean(entropy)
 
-        total_loss = -loss_clip + self.c1 * vf_loss - self.c2 * entropy
+        total_loss = - loss_clip + self.c1 * vf_loss - self.c2 * entropy
 
         self.optimizer.zero_grad()
         total_loss.backward()
@@ -174,4 +176,20 @@ class PPO():
         self.update_steps += 1
 
         return total_loss, loss_clip, vf_loss, entropy
+
+    def save_model(self, path):
+        # torch.save(self.model.state_dict(), path)
+        torch.save({
+            'update_steps': self.update_steps,
+            'model_state_dict': self.model.state_dict(),
+            'optimizer_state_dict': self.optimizer.state_dict(),
+        }, path)
+
+    def load_model(self, path):
+        # self.model.load_state_dict(torch.load(path))
+        checkpoint = torch.load(path)
+        self.model.load_state_dict(checkpoint['model_state_dict'])
+        self.optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
+        self.update_steps = checkpoint['update_steps']
+
 

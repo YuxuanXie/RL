@@ -46,8 +46,9 @@ class unityEnv(MultiAgentEnv):
         self.n_agent_ids = self.decision_steps.agent_id
         
         # Use side channel to config unity env
-        self.engine_config_channel.set_configuration_parameters(time_scale=20)
-        self.parameter_config_channel.set_float_parameter("checkpoint_radius", 50)
+        self.set_time_scale()
+        self.set_env_parameters()
+        self.cirrculum_param = 50
 
 
     def _extract_decision_info(self, decision_steps, terminated=False):
@@ -119,6 +120,15 @@ class unityEnv(MultiAgentEnv):
                     "n_agents": self.n_agents,
                     }
         return env_info
+    
+    # Literally, the number of executed action doesnot change along with the time scale .... 
+    # But the physics object solver might be inaccurate when the time scale is too large.
+    def set_time_scale(self, time_scale=20)
+        self.engine_config_channel.set_configuration_parameters(time_scale=time_scale)
+    
+    # Support float only
+    def set_env_parameters(self, key="checkpoint_radius", value=50):
+        self.parameter_config_channel.set_float_parameter(key, value)
 
 
 def main():

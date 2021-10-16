@@ -7,8 +7,11 @@ from ppo import PPO
 from collections import defaultdict
 from torch.utils.tensorboard import SummaryWriter
 
+time_token = datetime.now().strftime('%Y-%m-%d-%H-%M-%S')
+tblog_dir = f"./results/{time_token}/tblog/"
+model_dir = f"./results/{time_token}/model/"
 
-writer = SummaryWriter(log_dir=f"./log/{datetime.now().strftime('%Y-%m-%d-%H-%M-%S')}")
+writer = SummaryWriter(log_dir=tblog_dir)
 
 def main(args):
     # Create environment
@@ -18,12 +21,12 @@ def main(args):
 
     action_shape = env.action_shape
     obs_shape = env.observation_shape
-    alg = PPO(obs_shape, action_shape)
+    alg = PPO(obs_shape, action_shape, n_updates=4, learning_rate=5e-4, clip_ratio=0.1, hidden_size=32, c2=0.01, gamma=0.99, lam=1.0)
     
     memory = { each_str : defaultdict(list) for each_str in ["obs", "actions", "log_probs", "rewards", "v_preds", "next_v_preds", "dones"]}
     data = [[] for _ in range(6)]
 
-    for step in range(int(1e7)):
+    for episode in range(int(1e7)):
         action = {}
 
         action, value, log_prob = alg.act(cur_obs)
@@ -40,9 +43,8 @@ def main(args):
                     memory["dones"][agent_id].append(False)
 
         else:
-            if len(data[0]) > alg.batch_size:
-                data = [[] for _ in range(6)]
-            
+            # if len(data[0]) > alg.batch_size:
+            data = [[] for _ in range(6)]
             for agent_id in done.keys():
                 
                 if agent_id in cur_obs.keys(): 
@@ -56,31 +58,41 @@ def main(args):
                 memory["next_v_preds"][agent_id] = memory["v_preds"][agent_id][1:] + [0]
                 gaes = alg.get_gaes(memory["rewards"][agent_id], memory["v_preds"][agent_id], memory["next_v_preds"][agent_id])
                 gaes = np.array(gaes).astype(dtype=np.float64)
-                gaes = (gaes - gaes.mean()) / gaes.std()
-                # data = [obs, actions, log_probs, next_v_preds, rewards, gaes]
+                gaes = (gaes - gaes.mean()) / (gaes.std() + 1e-5 ) 
+                
+                # Concate two list
                 temp = [memory[each][agent_id] for each in ["obs", "actions", "log_probs", "next_v_preds", "rewards"]] + [gaes]
                 data = [list(d) + list(t) for d, t in zip(data, temp)]
 
                 if len(memory["rewards"][agent_id]) > 0 :
-                    writer.add_scalar("Info/max_reward", max(memory["rewards"][agent_id]), step)
-                    writer.add_scalar("Info/mean_reward", sum(memory["rewards"][agent_id])/len(memory["rewards"][agent_id]), step)
-                    writer.add_scalar("Info/max_pi", math.exp(max(memory["log_probs"][agent_id])), step)
+                    writer.add_scalar("Info/episode_max_reward", max(memory["rewards"][agent_id]), episode)
+                    writer.add_scalar("Info/mean_reward", sum(memory["rewards"][agent_id])/len(memory["rewards"][agent_id]), episode)
+                    writer.add_scalar("Info/episode_length", len(memory["rewards"][agent_id]), episode)
+                    writer.add_scalar("Info/episode_reward", sum(memory["rewards"][agent_id]), episode)
+                    writer.add_scalar("Info/max_pi", math.exp(max(memory["log_probs"][agent_id])), episode)
+
+                if sum(memory["rewards"][agent_id]) > 4.0 :
+                    env.set_env_parameters(value=max(0, env.cirrculum_param - 5))
 
                 for key in memory.keys():
                     memory[key][agent_id].clear()
 
-            for _ in range( int(len(data[0]) * alg.n_update / alg.batch_size) ):
+            for i in range( min(int(len(data[0]) * alg.n_update / alg.batch_size), alg.n_update) ):
                 # Sample training data
                 sample_indices = np.random.randint(low=0, high=len(data[0]), size=alg.batch_size)
                 sampled_data = [np.take(a=a, indices=sample_indices, axis=0) for a in data]
 
                 # # Train model
                 loss, policy_loss, value_loss, entropy = alg.learn(*sampled_data)
-                
-            writer.add_scalar("Info/total_loss", loss.item(), alg.update_steps)
-            writer.add_scalar("Info/policy_loss", policy_loss.item(), alg.update_steps)
-            writer.add_scalar("Info/value_loss", value_loss.item(), alg.update_steps)
-            writer.add_scalar("Info/entropy", entropy.item(), alg.update_steps)
+                if i == 0:
+                    writer.add_scalar("Info/total_loss", loss.item(), alg.update_steps)
+                    writer.add_scalar("Info/policy_loss", policy_loss.item(), alg.update_steps)
+                    writer.add_scalar("Info/value_loss", value_loss.item(), alg.update_steps)
+                    writer.add_scalar("Info/entropy", entropy.item(), alg.update_steps)
+
+        if episode % 100000 == 0:
+            alg.save_model(model_dir + f'_{episode}.pth')
+
 
         # print(f"step = {step} obs = {len(cur_obs)} reward = {reward} done = {done.keys()} update = {int(len(data[0]) * alg.n_update / alg.batch_size)} ")
         cur_obs = next_obs
