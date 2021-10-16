@@ -123,7 +123,7 @@ class unityEnv(MultiAgentEnv):
     
     # Literally, the number of executed action doesnot change along with the time scale .... 
     # But the physics object solver might be inaccurate when the time scale is too large.
-    def set_time_scale(self, time_scale=20)
+    def set_time_scale(self, time_scale=20):
         self.engine_config_channel.set_configuration_parameters(time_scale=time_scale)
     
     # Support float only

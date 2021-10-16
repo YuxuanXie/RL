@@ -1,3 +1,4 @@
+import os
 import math
 import argparse
 from datetime import datetime
@@ -8,10 +9,10 @@ from collections import defaultdict
 from torch.utils.tensorboard import SummaryWriter
 
 time_token = datetime.now().strftime('%Y-%m-%d-%H-%M-%S')
-tblog_dir = f"./results/{time_token}/tblog/"
-model_dir = f"./results/{time_token}/model/"
-
+tblog_dir = f"./results/tblog/{time_token}/"
+model_dir = f"./results/model/{time_token}/"
 writer = SummaryWriter(log_dir=tblog_dir)
+os.makedirs(model_dir)
 
 def main(args):
     # Create environment
@@ -91,7 +92,7 @@ def main(args):
                     writer.add_scalar("Info/entropy", entropy.item(), alg.update_steps)
 
         if episode % 100000 == 0:
-            alg.save_model(model_dir + f'_{episode}.pth')
+            alg.save_model(model_dir + f'{episode}.pth')
 
 
         # print(f"step = {step} obs = {len(cur_obs)} reward = {reward} done = {done.keys()} update = {int(len(data[0]) * alg.n_update / alg.batch_size)} ")
