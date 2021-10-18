@@ -14,15 +14,18 @@ model_dir = f"./results/model/{time_token}/"
 writer = SummaryWriter(log_dir=tblog_dir)
 os.makedirs(model_dir)
 
+
+# TODO: Add rollout and datamanager to make the structure clearer.
+
 def main(args):
     # Create environment
     env = unityEnv(args.binPath)
+
     # Get Observation
     cur_obs = env.reset()
-
     action_shape = env.action_shape
     obs_shape = env.observation_shape
-    alg = PPO(obs_shape, action_shape, n_updates=4, learning_rate=5e-4, clip_ratio=0.1, hidden_size=32, c2=0.01, gamma=0.99, lam=1.0)
+    alg = PPO(obs_shape, action_shape, n_updates=4, learning_rate=5e-5, batch_size=256, clip_ratio=0.3, hidden_size=128, c1=1.0, c2=0.01, gamma=0.99, lam=1.0)
     
     memory = { each_str : defaultdict(list) for each_str in ["obs", "actions", "log_probs", "rewards", "v_preds", "next_v_preds", "dones"]}
     data = [[] for _ in range(6)]
@@ -78,7 +81,7 @@ def main(args):
                 for key in memory.keys():
                     memory[key][agent_id].clear()
 
-            for i in range( min(int(len(data[0]) * alg.n_update / alg.batch_size), alg.n_update) ):
+            for i in range(int(len(data[0]) * alg.n_update / alg.batch_size)):
                 # Sample training data
                 sample_indices = np.random.randint(low=0, high=len(data[0]), size=alg.batch_size)
                 sampled_data = [np.take(a=a, indices=sample_indices, axis=0) for a in data]

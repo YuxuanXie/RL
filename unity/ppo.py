@@ -18,12 +18,15 @@ class model(nn.Module):
         self.f1 = nn.Linear(self.observation_shape, self.hidden_layers[0])
         self.f2 = nn.Linear(self.hidden_layers[0], self.hidden_layers[1])
         # Action head
-        self.logits = [nn.Linear(self.hidden_layers[1], output_size) for output_size in self.action_shape]
+        # Use ModuleList rather not list !!!! the later one doesnot appear in model.parameters()
+        self.logits = nn.ModuleList()
+        for output_size in self.action_shape:
+            self.logits.append(nn.Linear(self.hidden_layers[1], output_size))
 
         # Value head
         self.value = nn.Sequential(
             nn.Linear(self.observation_shape, self.hidden_layers[1]),
-            nn.ReLU(),
+            nn.Tanh(),
             nn.Linear(self.hidden_layers[1], 1)
         )
 
@@ -69,7 +72,7 @@ class PPO():
 
         # Model
         self.model = model(observation_shape, action_shape, hidden_size)
-        # self.model.apply(self.weights_init)
+        self.model.apply(self.weights_init)
 
         # Optimizer
         self.optimizer = optim.Adam(self.model.parameters(), lr=self.learning_rate)

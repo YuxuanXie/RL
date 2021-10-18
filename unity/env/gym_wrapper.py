@@ -46,9 +46,9 @@ class unityEnv(MultiAgentEnv):
         self.n_agent_ids = self.decision_steps.agent_id
         
         # Use side channel to config unity env
+        self.cirrculum_param = 50
         self.set_time_scale()
         self.set_env_parameters()
-        self.cirrculum_param = 50
 
 
     def _extract_decision_info(self, decision_steps, terminated=False):
