@@ -27,7 +27,7 @@ def main(args):
     # Rollout worker
     worker = Rollout(env_creator, memory)
     # PPO learner
-    alg = PPO(worker.obs_shape, worker.action_shape, n_updates=4, learning_rate=5e-5, batch_size=256, clip_ratio=0.3, hidden_size=128, c1=1.0, c2=0.01, gamma=args.gamma, lam=args.lam)
+    alg = PPO(worker.obs_shape, worker.action_shape, n_updates=args.n_updates, learning_rate=args.learning_rate, batch_size=args.batch_size, clip_ratio=args.clip_ratio, hidden_size=128, c1=args.c1, c2=args.c2, gamma=args.gamma, lam=args.lam)
     
     while alg.update_steps < 1e7:
         worker.run()
@@ -44,7 +44,7 @@ def main(args):
                     logger.write_tb("policy_loss", policy_loss.item(), alg.update_steps)
                     logger.write_tb("value_loss", value_loss.item(), alg.update_steps)
                     logger.write_tb("entropy", entropy.item(), alg.update_steps)
-                    
+
             logging.debug(f"learned {len(data[0])} steps!")
 
         if logger.save_model(memory.episode_num, 1e5):
@@ -54,6 +54,12 @@ def main(args):
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='arguments')
     parser.add_argument('--binPath', type=str, default='./env/debugger.app')
+    parser.add_argument('--n_updates', type=int, default=4)
+    parser.add_argument('--learning_rate', type=float, default=5e-5)
+    parser.add_argument('--batch_size', type=int, default=256)
+    parser.add_argument('--clip_ratio', type=float, default=0.3)
+    parser.add_argument('--c1', type=float, default=1.0)
+    parser.add_argument('--c2', type=float, default=0.01)
     parser.add_argument('--gamma', type=float, default=0.99)
     parser.add_argument('--lam', type=float, default=1.0)
     args = parser.parse_args()

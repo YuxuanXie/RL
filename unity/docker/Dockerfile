@@ -1,6 +1,4 @@
 FROM nvidia/cuda:9.2-cudnn7-devel-ubuntu16.04
-# FROM nvidia/cuda:10.0-cudnn7-devel-ubuntu16.04 
-# FROM nvidia/cuda:10.0-cudnn7-runtime-ubuntu16.04 
 
 # CUDA includes
 ENV CUDA_PATH /usr/local/cuda
@@ -33,7 +31,7 @@ RUN pip3 install mlagents==0.18.0
 # #### install pytorch
 # #### -------------------------------------------------------------------
 # RUN pip3 install torch==1.4.0+cu92  torchvision==0.5.0+cu92 -f https://download.pytorch.org/whl/torch_stable.html  -i https://pypi.douban.com/simple/
-RUN pip install torch==1.5.0 torchvision==0.6.0 -i https://pypi.douban.com/simple/
+RUN pip3 install torch==1.5.0 torchvision==0.6.0 -f https://download.pytorch.org/whl/torch_stable.html  -i https://pypi.douban.com/simple/
 
 # ## -- Yuxuan 
 # RUN pip install tensorboardX -i https://pypi.douban.com/simple/
