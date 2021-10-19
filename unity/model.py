@@ -2,10 +2,11 @@ from torch import nn
 import torch.nn.functional as F
 
 class Model(nn.Module):
-    def __init__(self, observation_shape, action_shape, hidden_size=256):
+    def __init__(self, observation_shape, action_shape, model_config=None):
         super().__init__()
         self.observation_shape = observation_shape
         self.action_shape = action_shape
+        hidden_size = model_config["hidden_size"] if model_config else 128
         self.hidden_layers = [hidden_size, int(hidden_size/2)]
         
         self.f1 = nn.Linear(self.observation_shape, self.hidden_layers[0])

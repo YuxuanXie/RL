@@ -7,12 +7,12 @@ from utils import get_dist
 
 
 class Rollout():
-    def __init__(self, env_creator, memory):
+    def __init__(self, env_creator, memory, model_config):
         self.env = env_creator()
         self.cur_obs = self.env.reset()
         self.action_shape = self.env.action_shape
         self.obs_shape = self.env.observation_shape
-        self.model = Model(self.obs_shape, self.action_shape)
+        self.model = Model(self.obs_shape, self.action_shape, model_config)
         self.trajectory = Trajectory()
         self.data_manager = memory
         
@@ -57,3 +57,6 @@ class Rollout():
             log_prob[agent_id] = sum([d.log_prob(a) for d, a in zip(dist, action[agent_id])]).item()
 
         return action, values, log_prob
+    
+    def update_model(self, new_model):
+        self.model.load_state_dict(new_model.state_dict())

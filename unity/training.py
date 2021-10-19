@@ -20,15 +20,16 @@ def main(args):
     def env_creator():
         return unityEnv(args.binPath)
 
+    model_config = {"hidden_size" : 128}
     # tb logger    
     logger = TbLogger()
     # Central data manager
     memory = Memory(logger, args.gamma, args.lam)
     # Rollout worker
-    worker = Rollout(env_creator, memory)
+    worker = Rollout(env_creator, memory, model_config)
     # PPO learner
-    alg = PPO(worker.obs_shape, worker.action_shape, n_updates=args.n_updates, learning_rate=args.learning_rate, batch_size=args.batch_size, clip_ratio=args.clip_ratio, hidden_size=128, c1=args.c1, c2=args.c2, gamma=args.gamma, lam=args.lam)
-    
+    alg = PPO(worker.obs_shape, worker.action_shape, n_updates=args.n_updates, learning_rate=args.learning_rate, batch_size=args.batch_size, clip_ratio=args.clip_ratio, c1=args.c1, c2=args.c2, gamma=args.gamma, lam=args.lam, model_config=model_config)
+    import pdb; pdb.set_trace()
     while alg.update_steps < 1e7:
         worker.run()
         data = memory.get_one_batch(alg.batch_size)
@@ -46,6 +47,7 @@ def main(args):
                     logger.write_tb("entropy", entropy.item(), alg.update_steps)
 
             logging.debug(f"learned {len(data[0])} steps!")
+            worker.update_model(alg.model)
 
         if logger.save_model(memory.episode_num, 1e5):
             alg.save_model(logger.model_dir + f'{memory.episode_num}.pth')

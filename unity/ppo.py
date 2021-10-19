@@ -18,7 +18,7 @@ class PPO():
             clip_ratio = 0.3,
             c1 = 1.0,
             c2 = 0.00,
-            hidden_size=128):
+            model_config=None):
 
         # Env parameters
         self.observation_shape = observation_shape
@@ -37,7 +37,7 @@ class PPO():
         self.gradient_nrom = 10
 
         # Model
-        self.model = Model(observation_shape, action_shape, hidden_size)
+        self.model = Model(observation_shape, action_shape, model_config)
         # self.model.apply(self.weights_init)
 
         # Optimizer
