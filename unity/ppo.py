@@ -38,7 +38,7 @@ class PPO():
 
         # Model
         self.model = Model(observation_shape, action_shape, hidden_size)
-        self.model.apply(self.weights_init)
+        # self.model.apply(self.weights_init)
 
         # Optimizer
         self.optimizer = optim.Adam(self.model.parameters(), lr=self.learning_rate)
