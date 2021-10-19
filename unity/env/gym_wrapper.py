@@ -1,13 +1,9 @@
 import numpy as np
 from .multiagentenv import MultiAgentEnv
 from mlagents_envs.environment import UnityEnvironment
-from mlagents_envs.side_channel import SideChannel, IncomingMessage, OutgoingMessage
-from mlagents_envs.side_channel.raw_bytes_channel import RawBytesChannel
-from mlagents_envs.side_channel.side_channel_manager import SideChannelManager
 from mlagents_envs.side_channel.environment_parameters_channel import EnvironmentParametersChannel
 from mlagents_envs.side_channel.engine_configuration_channel import (
     EngineConfigurationChannel,
-    EngineConfig,
 )
 
 class unityEnv(MultiAgentEnv):

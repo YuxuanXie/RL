@@ -9,3 +9,5 @@ logs
 .vscode
 .DS_Store
 results
+*.pyc
+*.app

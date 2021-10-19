@@ -1,43 +1,9 @@
-import copy
 import torch
-import numpy as np
 from torch import nn
 import torch.optim as optim
 from torch import distributions
-import torch.nn.functional as F
 from torch.autograd import Variable
-
-
-class model(nn.Module):
-    def __init__(self, observation_shape, action_shape, hidden_size=256):
-        super().__init__()
-        self.observation_shape = observation_shape
-        self.action_shape = action_shape
-        self.hidden_layers = [hidden_size, int(hidden_size/2)]
-        
-        self.f1 = nn.Linear(self.observation_shape, self.hidden_layers[0])
-        self.f2 = nn.Linear(self.hidden_layers[0], self.hidden_layers[1])
-        # Action head
-        # Use ModuleList rather not list !!!! the later one doesnot appear in model.parameters()
-        self.logits = nn.ModuleList()
-        for output_size in self.action_shape:
-            self.logits.append(nn.Linear(self.hidden_layers[1], output_size))
-
-        # Value head
-        self.value = nn.Sequential(
-            nn.Linear(self.observation_shape, self.hidden_layers[1]),
-            nn.Tanh(),
-            nn.Linear(self.hidden_layers[1], 1)
-        )
-
-
-    def forward(self, obs):
-        x = F.relu(self.f1(obs))
-        x = F.relu(self.f2(x))
-        logits = [head(x) for head in self.logits]
-        probs = [F.softmax(each, dim=-1) for each in logits]
-        value = self.value(obs)
-        return probs, value
+from model import Model
 
 
 class PPO():
@@ -71,7 +37,7 @@ class PPO():
         self.gradient_nrom = 10
 
         # Model
-        self.model = model(observation_shape, action_shape, hidden_size)
+        self.model = Model(observation_shape, action_shape, hidden_size)
         self.model.apply(self.weights_init)
 
         # Optimizer
@@ -83,57 +49,8 @@ class PPO():
         if classname.find('Linear') != -1:
             torch.nn.init.xavier_uniform_(m.weight)
 
-    # Return distributions of all action dimension 
-    # For all agents
-    # Input : list of probs
-    # Return : list of distributions
-    def get_dist(self, probs):
-        dist = [distributions.Categorical(each) for each in probs ]
-        return dist
-    
-    # Get action for each obs
-    # For all agents
-    # Input : dict id->obs
-    # Return : dict id -> obj
-    def act(self, obs):
-        action = {}
-        log_prob = {}
-        values = {}
-        for agent_id in obs.keys():
-            probs, v = self.model(Variable(torch.FloatTensor(obs[agent_id])))
-            dist = self.get_dist(probs)
-            values[agent_id] = v[0]
-            action[agent_id] = [d.sample() for d in dist]
-            log_prob[agent_id] = sum([d.log_prob(a) for d, a in zip(dist, action[agent_id])]).item()
-
-        return action, values, log_prob
-
-    # For one agent
-    def get_gaes(self, rewards, v_preds, next_v_preds):
-        # source: https://github.com/uidilr/ppo_tf/blob/master/ppo.py#L98
-        deltas = [r_t + self.gamma * v_next - v for r_t, v_next, v in zip(rewards, next_v_preds, v_preds)]
-        gaes = copy.deepcopy(deltas)
-        for t in reversed(range(len(gaes) - 1)):  # is T-1, where T is time step which run policy
-            gaes[t] = gaes[t] + self.lam * self.gamma * gaes[t + 1]
-        return gaes
-
-    # For one agent
-    # Input obs : n * self.observation_shape
-    # Input actions : n * self.action_shape
-
-    # def evaluate_actions(self, obs, actions):
-    #     outputs, values = self.model(obs)
-    #     # Get distributions for tree dimension  dist[n]-> action_dimension n 
-    #     dist = np.array([self.get_dist(output) for output in outputs])
-    #     dist = dist.transpose()
-    #     log_prob = []
-    #     entropy = []
-    #     for d, a in zip(dist, actions):
-    #         log_prob.append(np.prod([each_d.log_prob(each_a) for each_d, each_a in zip(d,a)]))
-    #         entropy.append(sum([each_d.entropy() for each_d in d])/len(d))
-
-    #     return torch.stack(log_prob), values, torch.stack(entropy)
-
+    # Used for updating the model
+    # Input: 
     def evaluate_actions(self, obs, actions):
         outputs, values = self.model(obs)
         # Get distributions for tree dimension  dist[n]-> action_dimension n 
