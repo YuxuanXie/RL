@@ -4,6 +4,8 @@ import torch.optim as optim
 from torch import distributions
 from torch.autograd import Variable
 from model import Model
+from utils import get_dist
+
 
 
 class PPO():
@@ -48,6 +50,26 @@ class PPO():
         classname = m.__class__.__name__
         if classname.find('Linear') != -1:
             torch.nn.init.xavier_uniform_(m.weight)
+
+
+    # Get action for each obs
+    # For all agents
+    # Input : dict id->obs
+    # Return : dict id -> obj
+    def act(self, obs):
+        action = {}
+        log_prob = {}
+        values = {}
+        for agent_id in obs.keys():
+            probs, v = self.model(Variable(torch.FloatTensor(obs[agent_id])))
+            dist = get_dist(probs)
+            values[agent_id] = v[0]
+            # action[agent_id] = [d.sample() for d in dist]
+            action[agent_id] = [ p.argmax() for p in probs]
+            # log_prob[agent_id] = sum([d.log_prob(a) for d, a in zip(dist, action[agent_id])]).item()
+            log_prob[agent_id] = 0.0
+
+        return action, values, log_prob
 
     # Used for updating the model
     # Input: 

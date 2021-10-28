@@ -28,13 +28,12 @@ def main(args):
         action, value, log_prob = alg.act(cur_obs)
         next_obs, reward, done, info = env.step(action)
 
-
         print(f"step = {step} obs = {len(cur_obs)} reward = {reward} done = {done.keys()}")
         cur_obs = next_obs
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='arguments')
-    parser.add_argument('--binPath', type=str, default='./env/visuallizer.app')
+    parser.add_argument('--binPath', type=str, default='./env/release.app')
     parser.add_argument('--checkpoint', type=str, default='results/model/2021-10-17-11-59-50/900000.pth')
     args = parser.parse_args()
     main(args)
