@@ -20,7 +20,8 @@ class PPO():
             clip_ratio = 0.3,
             c1 = 1.0,
             c2 = 0.00,
-            model_config=None):
+            model_config=None,
+            gpu_num=1):
 
         # Env parameters
         self.observation_shape = observation_shape
@@ -44,6 +45,18 @@ class PPO():
 
         # Optimizer
         self.optimizer = optim.Adam(self.model.parameters(), lr=self.learning_rate)
+        
+
+        # Cuda 
+        if torch.cuda.is_available():
+            self.device = torch.device(f'cuda:{gpu_num}')
+            torch.cuda.set_device(gpu_num)
+            self.model.cuda()
+            self.FloatTensor = torch.cuda.FloatTensor
+        else:
+            self.device = torch.device('cpu')
+            self.FloatTensor = torch.FloatTensor
+
 
     # weight xavier initialize
     def weights_init(self, m):
@@ -91,15 +104,16 @@ class PPO():
 
     # For one agent
     def learn(self, obs, actions, log_probs, next_v_preds, rewards, gaes):
-        obs = Variable(torch.FloatTensor(obs))
-        actions = Variable(torch.FloatTensor(actions))
-        rewards = Variable(torch.FloatTensor(rewards))
-        gaes = Variable(torch.FloatTensor(gaes))
-        log_probs = Variable(torch.FloatTensor(log_probs))
+        obs = Variable(self.FloatTensor(obs))
+        actions = Variable(self.FloatTensor(actions))
+        rewards = Variable(self.FloatTensor(rewards))
+        gaes = Variable(self.FloatTensor(gaes))
+        log_probs = Variable(self.FloatTensor(log_probs))
+        next_v_preds = Variable(self.FloatTensor(next_v_preds))
 
         new_log_probs, state_values, entropy = self.evaluate_actions(obs, actions)
         ratio = torch.exp(new_log_probs - log_probs)
-        clipped_ratios = torch.clip(ratio, 1-self.clip_ratio, 1+self.clip_ratio)
+        clipped_ratios = torch.clamp(ratio, 1-self.clip_ratio, 1+self.clip_ratio)
 
         loss_clip = torch.min(gaes*ratio, gaes*clipped_ratios)
         loss_clip = torch.mean(loss_clip)
