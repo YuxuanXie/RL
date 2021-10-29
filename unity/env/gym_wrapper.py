@@ -10,6 +10,8 @@ class unityEnv(MultiAgentEnv):
     "The gym wrapper for multi-agent unity environemnt"
     def __init__(self, 
                 bin_path,
+                base_port=5005,
+                worker_id=0,
                 ):
         """
         Create a unity environment 
@@ -24,7 +26,7 @@ class unityEnv(MultiAgentEnv):
         self.engine_config_channel = EngineConfigurationChannel()
         self.parameter_config_channel = EnvironmentParametersChannel()
 
-        self._env = UnityEnvironment(file_name=bin_path, side_channels=[self.engine_config_channel, self.parameter_config_channel] )
+        self._env = UnityEnvironment(file_name=bin_path, side_channels=[self.engine_config_channel, self.parameter_config_channel], base_port=base_port, worker_id=worker_id )
         self._env.reset()
 
         # Observation args

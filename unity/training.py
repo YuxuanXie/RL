@@ -18,7 +18,7 @@ logging.basicConfig(level=logging.INFO)
 def main(args):
     # Create environment
     def env_creator():
-        return unityEnv(args.binPath)
+        return unityEnv(args.binPath, worker_id=args.worker_id)
 
     model_config = {"hidden_size" : 128}
     # tb logger    
@@ -64,6 +64,7 @@ if __name__ == '__main__':
     parser.add_argument('--c2', type=float, default=0.05)
     parser.add_argument('--gamma', type=float, default=0.95)
     parser.add_argument('--lam', type=float, default=0.9)
+    parser.add_argument('--worker_id', type=int, default=0)
     args = parser.parse_args()
     main(args)
 
