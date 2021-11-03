@@ -33,9 +33,9 @@ class Rollout():
                     if agent_id in self.cur_obs.keys(): 
                         self.trajectory.add_one_step_for_one_agent(agent_id, self.cur_obs, action, log_prob, reward, v_preds, done=True)
                         self.data_manager.add_to_batch(self.trajectory, agent_id)
-                    if sum(self.trajectory["rewards"][agent_id]) > 4.0 :
-                        self.env.cirrculum_param -= 5 if self.env.cirrculum_param >= 0 else 0
-                        self.env.set_env_parameters(value=max(0,  self.env.cirrculum_param))
+                    # if sum(self.trajectory["rewards"][agent_id]) > 8.0 :
+                    #     self.env.cirrculum_param -= 5 if self.env.cirrculum_param >= 0 else 0
+                    #     self.env.set_env_parameters(value=max(0,  self.env.cirrculum_param))
 
             self.cur_obs = next_obs
             logging.debug(f"step = {episode} obs = {len(self.cur_obs)} reward = {reward} done = {done.keys()}")
