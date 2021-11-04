@@ -3,19 +3,20 @@ import logging
 from model import Model
 from memory import Trajectory
 from torch.autograd import Variable
-from utils import get_dist
+from utils import get_dist, CLManager
 
 
 class Rollout():
-    def __init__(self, env_creator, memory, model_config):
+    def __init__(self, env_creator, memory, config):
         self.env = env_creator()
         self.cur_obs = self.env.reset()
         self.action_shape = self.env.action_shape
         self.obs_shape = self.env.observation_shape
-        self.model = Model(self.obs_shape, self.action_shape, model_config)
+        self.model = Model(self.obs_shape, self.action_shape, config["model"])
         self.trajectory = Trajectory()
         self.data_manager = memory
-        
+        self.CL_manager = CLManager(config["CL"]["threshold"], config["CL"]["CL_params"])
+    
     # Generate trajectories
     # TODO: fix the issus about droping one step when one agent is done.
     def run(self):
@@ -23,7 +24,6 @@ class Rollout():
 
             action, v_preds, log_prob = self.act(self.cur_obs)
             next_obs, reward, done, info = self.env.step(action)
-
 
             if not done.keys():
                 if len(self.cur_obs) == self.env.n_agents:
@@ -33,6 +33,10 @@ class Rollout():
                     if agent_id in self.cur_obs.keys(): 
                         self.trajectory.add_one_step_for_one_agent(agent_id, self.cur_obs, action, log_prob, reward, v_preds, done=True)
                         self.data_manager.add_to_batch(self.trajectory, agent_id)
+                        self.CL_manager.add_reward(sum(self.trajectory["rewards"][agent_id]))
+
+                if self.CL_manager.to_next_level():
+                    self.env.set_env_parameters(value = self.CL_manager.get_cur_CL_params())
                     # if sum(self.trajectory["rewards"][agent_id]) > 8.0 :
                     #     self.env.cirrculum_param -= 5 if self.env.cirrculum_param >= 0 else 0
                     #     self.env.set_env_parameters(value=max(0,  self.env.cirrculum_param))
@@ -61,3 +65,4 @@ class Rollout():
     
     def update_model(self, new_model):
         self.model.load_state_dict(new_model.state_dict())
+

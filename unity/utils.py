@@ -1,6 +1,7 @@
 import os
 import copy
 from datetime import datetime
+from numpy.core.fromnumeric import mean
 from torch import distributions
 from torch.utils.tensorboard import SummaryWriter
 
@@ -24,6 +25,41 @@ class TbLogger():
             return True
         else:
             return False
+
+"""
+    Curriculum learning manager
+"""
+class CLManager():
+    def __init__(self, threshold, CL_params):
+        self.threshold = threshold
+        self.CL_params = CL_params
+        self.cur_cl_stage = 0
+
+        self.reward_buffer = []
+        self.buffer_capacity = 400
+
+        self.previous_mean_reward = 0
+
+
+    def add_reward(self, reward):
+        if len(self.reward_buffer) >= self.buffer_capacity:
+            self.reward_buffer.pop(0)
+        
+        self.reward_buffer.append(reward)
+
+    def to_next_level(self):
+        
+        mean_reward = sum(self.reward_buffer) / len(self.reward_buffer) 
+        mean_reward = self.previous_mean_reward * 0.25 + mean_reward * 0.75
+
+        if mean_reward > self.threshold[self.cur_cl_stage]:
+            self.cur_cl_stage += 1
+            return True
+
+        return False
+    
+    def get_cur_CL_params(self):
+        return self.CL_params[self.cur_cl_stage]
 
 
 # For one agent

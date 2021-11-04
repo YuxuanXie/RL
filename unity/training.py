@@ -13,6 +13,7 @@ from torch.utils.tensorboard import SummaryWriter
 
 
 logging.basicConfig(level=logging.INFO)
+# logging.basicConfig(level=logging.DEBUG)
 # TODO: Add rollout and datamanager to make the structure clearer.
 
 def main(args):
@@ -20,15 +21,24 @@ def main(args):
     def env_creator():
         return unityEnv(args.binPath, worker_id=args.worker_id)
 
-    model_config = {"hidden_size" : 128}
+    config = {
+        "model" :  {"hidden_size" : 128},
+        "CL" : {
+            "threshold" : [2, 2, 4, 6],
+            "CL_params" : [50, 30, 15, 0]
+        },
+        "gamma" : args.gamma,
+        "lam" :  args.lam,
+    }
+
     # tb logger    
     logger = TbLogger()
     # Central data manager
-    memory = Memory(logger, args.gamma, args.lam)
+    memory = Memory(logger, config)
     # Rollout worker
-    worker = Rollout(env_creator, memory, model_config)
+    worker = Rollout(env_creator, memory, config)
     # PPO learner
-    alg = PPO(worker.obs_shape, worker.action_shape, n_updates=args.n_updates, learning_rate=args.learning_rate, batch_size=args.batch_size, clip_ratio=args.clip_ratio, c1=args.c1, c2=args.c2, gamma=args.gamma, lam=args.lam, model_config=model_config)
+    alg = PPO(worker.obs_shape, worker.action_shape, n_updates=args.n_updates, learning_rate=args.learning_rate, batch_size=args.batch_size, clip_ratio=args.clip_ratio, c1=args.c1, c2=args.c2, gamma=args.gamma, lam=args.lam, config=config)
 
     while alg.update_steps < 1e7:
         worker.run()

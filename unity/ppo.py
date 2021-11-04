@@ -20,7 +20,7 @@ class PPO():
             clip_ratio = 0.3,
             c1 = 1.0,
             c2 = 0.00,
-            model_config=None,
+            config=None,
             gpu_num=1):
 
         # Env parameters
@@ -39,6 +39,7 @@ class PPO():
         self.update_steps = 0
         self.gradient_nrom = 10
 
+        model_config = config["model"] if "model" in config.keys() else None
         # Model
         self.model = Model(observation_shape, action_shape, model_config)
         # self.model.apply(self.weights_init)

@@ -42,7 +42,7 @@ class Trajectory():
 
 
 class Memory():
-    def __init__(self, logger, gamma, lam):
+    def __init__(self, logger, config):
         self.batch_metric = ["obs", "actions", "log_probs", "rewards", "v_preds", "next_v_preds", "gaes", "dones"] # Remove "done"
         self.learn_metric = ["obs", "actions", "log_probs", "next_v_preds", "rewards", "gaes"]
 
@@ -53,9 +53,9 @@ class Memory():
         # tensorboard logger
         self.logger = logger
 
-        self.gamma = gamma
-        self.lam = lam
-
+        self.gamma = config["gamma"]
+        self.lam = config["lam"]
+    
         self.episode_num = 0
 
     # Add one trajectory to memory
@@ -109,4 +109,4 @@ class Memory():
         for each_str in self.batch_metric:
             for agent_id in self.batch_data[each_str].keys():
                 self.batch_data[each_str][agent_id] = []
-
+    
