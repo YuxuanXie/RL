@@ -16,6 +16,7 @@ class Rollout():
         self.trajectory = Trajectory()
         self.data_manager = memory
         self.CL_manager = CLManager(config["CL"]["threshold"], config["CL"]["CL_params"])
+        self.env.set_env_parameters(value = self.CL_manager.get_cur_CL_params())
     
     # Generate trajectories
     # TODO: fix the issus about droping one step when one agent is done.
@@ -37,6 +38,7 @@ class Rollout():
 
                 if self.CL_manager.to_next_level():
                     self.env.set_env_parameters(value = self.CL_manager.get_cur_CL_params())
+
                     # if sum(self.trajectory["rewards"][agent_id]) > 8.0 :
                     #     self.env.cirrculum_param -= 5 if self.env.cirrculum_param >= 0 else 0
                     #     self.env.set_env_parameters(value=max(0,  self.env.cirrculum_param))
