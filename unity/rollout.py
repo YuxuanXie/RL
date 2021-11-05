@@ -33,12 +33,14 @@ class Rollout():
                 for agent_id in done.keys():
                     if agent_id in self.cur_obs.keys(): 
                         self.trajectory.add_one_step_for_one_agent(agent_id, self.cur_obs, action, log_prob, reward, v_preds, done=True)
-                        self.data_manager.add_to_batch(self.trajectory, agent_id)
                         self.CL_manager.add_reward(sum(self.trajectory["rewards"][agent_id]))
+                        # Add agent_id's trajectory data into the memory and clear
+                        # NOTE: All trajectory operations have to be done before this !!
+                        self.data_manager.add_to_batch(self.trajectory, agent_id)
 
                 if self.CL_manager.to_next_level():
                     self.env.set_env_parameters(value = self.CL_manager.get_cur_CL_params())
-                    
+
             self.cur_obs = next_obs
             logging.debug(f"step = {episode} obs = {len(self.cur_obs)} reward = {reward} done = {done.keys()}")
 
