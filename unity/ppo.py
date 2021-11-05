@@ -142,9 +142,13 @@ class PPO():
             'optimizer_state_dict': self.optimizer.state_dict(),
         }, path)
 
-    def load_model(self, path):
+    def load_model(self, path, cuda=True):
         # self.model.load_state_dict(torch.load(path))
-        checkpoint = torch.load(path)
+        if cuda:
+            checkpoint = torch.load(path)
+        else:
+            checkpoint = torch.load(path, map_location=torch.device('cpu'))
+            
         self.model.load_state_dict(checkpoint['model_state_dict'])
         self.optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
         self.update_steps = checkpoint['update_steps']

@@ -10,6 +10,16 @@ from torch.utils.tensorboard import SummaryWriter
 
 
 def main(args):
+
+
+    config = {
+        "model" :  {"hidden_size" : 128},
+        "CL" : {
+            "threshold" : [2, 2, 4, 6],
+            "CL_params" : [50, 30, 15, 0]
+        },
+    }
+
     # Create environment
     env = unityEnv(args.binPath)
     # Get Observation
@@ -18,9 +28,9 @@ def main(args):
 
     action_shape = env.action_shape
     obs_shape = env.observation_shape
-    alg = PPO(obs_shape, action_shape)
+    alg = PPO(obs_shape, action_shape, config=config)
     
-    alg.load_model(args.checkpoint)
+    alg.load_model(args.checkpoint, cuda=False)
 
     for step in range(int(1e3)):
         action = {}
@@ -33,7 +43,7 @@ def main(args):
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='arguments')
-    parser.add_argument('--binPath', type=str, default='./env/release.app')
+    parser.add_argument('--binPath', type=str, default='./env/visuallizer.app')
     parser.add_argument('--checkpoint', type=str, default='results/model/2021-10-17-11-59-50/900000.pth')
     args = parser.parse_args()
     main(args)

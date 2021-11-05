@@ -38,11 +38,7 @@ class Rollout():
 
                 if self.CL_manager.to_next_level():
                     self.env.set_env_parameters(value = self.CL_manager.get_cur_CL_params())
-
-                    # if sum(self.trajectory["rewards"][agent_id]) > 8.0 :
-                    #     self.env.cirrculum_param -= 5 if self.env.cirrculum_param >= 0 else 0
-                    #     self.env.set_env_parameters(value=max(0,  self.env.cirrculum_param))
-
+                    
             self.cur_obs = next_obs
             logging.debug(f"step = {episode} obs = {len(self.cur_obs)} reward = {reward} done = {done.keys()}")
 
