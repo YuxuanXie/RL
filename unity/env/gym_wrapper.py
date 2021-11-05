@@ -128,6 +128,7 @@ class unityEnv(MultiAgentEnv):
     
     # Support float only
     def set_env_parameters(self, key="checkpoint_radius", value=50):
+        print(f"Set {key} to {value}")
         self.parameter_config_channel.set_float_parameter(key, value)
 
 
