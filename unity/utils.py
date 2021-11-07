@@ -52,7 +52,7 @@ class CLManager():
         mean_reward = sum(self.reward_buffer) / len(self.reward_buffer) 
         mean_reward = self.previous_mean_reward * 0.25 + mean_reward * 0.75
 
-        if self.cur_cl_stage < len(self.threshold) and mean_reward > self.threshold[self.cur_cl_stage]:
+        if self.cur_cl_stage < len(self.threshold)-1 and mean_reward > self.threshold[self.cur_cl_stage]:
             # Goto next curriculum learning stage
             self.cur_cl_stage += 1
             self.reward_buffer.clear()
