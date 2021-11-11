@@ -24,7 +24,7 @@ def main(args):
     config = {
         "model" :  {"hidden_size" : 128},
         "CL" : {
-            "threshold" : [2, 2, 4, 6],
+            "threshold" : [6, 6, 10, 6],
             "CL_params" : [50, 30, 15, 0]
         },
         "gamma" : args.gamma,
