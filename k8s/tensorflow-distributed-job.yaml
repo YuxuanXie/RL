@@ -1,0 +1,91 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: tf-distributed-svc
+  namespace: default
+spec:
+  clusterIP: None  # Headless service
+  selector:
+    app: tf-training
+  ports:
+  - name: worker
+    port: 12345
+    targetPort: 12345
+
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: tf-training
+  namespace: default
+spec:
+  serviceName: tf-distributed-svc
+  replicas: 2  # 2个pod进行分布式训练
+  selector:
+    matchLabels:
+      app: tf-training
+  template:
+    metadata:
+      labels:
+        app: tf-training
+    spec:
+      containers:
+      - name: tf-worker
+        image: tensorflow/tensorflow:2.12.0-gpu  # 根据需要修改镜像
+        command: ["/bin/bash", "-c"]
+        args:
+          - |
+            # 设置TensorFlow分布式环境变量
+            export POD_NAME=${HOSTNAME}
+            export WORKER_INDEX=${HOSTNAME##*-}
+            
+            # 构建TF_CONFIG
+            export TF_CONFIG=$(cat <<EOF
+            {
+              "cluster": {
+                "worker": [
+                  "tf-training-0.tf-distributed-svc.default.svc.cluster.local:12345",
+                  "tf-training-1.tf-distributed-svc.default.svc.cluster.local:12345"
+                ]
+              },
+              "task": {
+                "type": "worker",
+                "index": ${WORKER_INDEX}
+              }
+            }
+            EOF
+            )
+            
+            echo "TF_CONFIG: $TF_CONFIG"
+            echo "Starting TensorFlow distributed training..."
+            
+            # 安装依赖
+            pip install gym tensorflow-probability
+            
+            # 运行训练脚本
+            python /workspace/CartPole/PPO/ppo_distributed.py
+        
+        ports:
+        - containerPort: 12345
+          name: worker
+        
+        volumeMounts:
+        - name: workspace
+          mountPath: /workspace
+        
+        resources:
+          limits:
+            nvidia.com/gpu: 1  # 如果需要GPU
+          requests:
+            memory: "4Gi"
+            cpu: "2"
+        
+        env:
+        - name: PYTHONUNBUFFERED
+          value: "1"
+      
+      volumes:
+      - name: workspace
+        hostPath:
+          path: /workspace
+          type: Directory
