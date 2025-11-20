@@ -1,0 +1,85 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: pytorch-distributed-svc
+  namespace: default
+spec:
+  clusterIP: None  # Headless service
+  selector:
+    app: pytorch-training
+  ports:
+  - name: master
+    port: 23456
+    targetPort: 23456
+
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: pytorch-training
+  namespace: default
+spec:
+  serviceName: pytorch-distributed-svc
+  replicas: 2  # 2个pod进行分布式训练
+  selector:
+    matchLabels:
+      app: pytorch-training
+  template:
+    metadata:
+      labels:
+        app: pytorch-training
+    spec:
+      containers:
+      - name: pytorch-worker
+        image: pytorch/pytorch:2.0.0-cuda11.7-cudnn8-runtime  # 根据需要修改镜像
+        command: ["/bin/bash", "-c"]
+        args:
+          - |
+            # 获取pod的序号作为rank
+            export RANK=${HOSTNAME##*-}
+            export WORLD_SIZE=2
+            export MASTER_ADDR=pytorch-training-0.pytorch-distributed-svc.default.svc.cluster.local
+            export MASTER_PORT=23456
+            
+            echo "Starting training with RANK=$RANK, WORLD_SIZE=$WORLD_SIZE"
+            
+            # 安装依赖
+            pip install gym numpy
+            
+            # 运行训练脚本
+            python /workspace/CartPole/DQN/dqn_distributed.py
+        
+        ports:
+        - containerPort: 23456
+          name: master
+        
+        volumeMounts:
+        - name: workspace
+          mountPath: /workspace
+        
+        resources:
+          limits:
+            nvidia.com/gpu: 1  # 如果需要GPU
+          requests:
+            memory: "4Gi"
+            cpu: "2"
+      
+      volumes:
+      - name: workspace
+        hostPath:
+          path: /workspace  # 或者使用PVC持久化存储
+          type: Directory
+
+---
+# 可选：使用PVC替代hostPath
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: training-data-pvc
+spec:
+  accessModes:
+    - ReadWriteMany  # 多个pod同时读写
+  resources:
+    requests:
+      storage: 10Gi
+  # storageClassName: your-storage-class
